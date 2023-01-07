@@ -217,6 +217,16 @@ class Ui_MainWindow(object):
         self.btn_show.setGeometry(QtCore.QRect(371, 190, 101, 25))
         self.btn_show.setObjectName("btn_show")
         self.btn_show.setFont(font)
+        self.btn_sum = QtWidgets.QPushButton(self.groupBox, clicked= lambda: self.click_sum_data())
+        self.btn_sum.setGeometry(QtCore.QRect(491, 190, 101, 25))
+        self.btn_sum.setObjectName("btn_sum")
+        self.btn_sum.setFont(font)
+        
+        self.btn_average = QtWidgets.QPushButton(self.groupBox, clicked= lambda: self.click_average_data())
+        self.btn_average.setGeometry(QtCore.QRect(611, 190, 101, 25))
+        self.btn_average.setObjectName("btn_average")
+        self.btn_average.setFont(font)
+
         self.groupBox_5 = QtWidgets.QGroupBox(self.tab)
         self.groupBox_5.setGeometry(QtCore.QRect(739, 40, 181, 161))
         font = QtGui.QFont()
@@ -571,6 +581,8 @@ class Ui_MainWindow(object):
         self.groupBox_4.setTitle(_translate("MainWindow", "Subtracted"))
         self.btn_import_subd.setText(_translate("MainWindow", "Import"))
         self.btn_show.setText(_translate("MainWindow", "Show"))
+        self.btn_sum.setText(_translate("MainWindow", "Sum"))
+        self.btn_average.setText(_translate("MainWindow", "Average"))
         self.groupBox_5.setTitle(_translate("MainWindow", "Remove outliers:"))
         self.groupBox_rot_img.setTitle(_translate("MainWindow", "Rotate image:"))
         self.lbl_rot_ang.setText(_translate("MainWindow", "Angle:"))
@@ -638,11 +650,11 @@ class Ui_MainWindow(object):
     def click_import_sub(self):
         self.import_data("sub")
 
-    def get_q(self):
+    def click_sum_data(self):
         pass
-
-    
-    
+        
+    def click_average_data(self):
+        pass
     
     def onclick(self,event):
         '''
