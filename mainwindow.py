@@ -640,30 +640,65 @@ class Ui_MainWindow(object):
     #     quitAct = contextMenu.addAction("Quit")
     #     action = contextMenu.exec_(self.mapToGlobal(event.pos()))
 
-    # def click_sum_data(self):
+    def get_data_dict(self, data_type):
+        if data_type == "smp":
+            return self.sample_data
+        elif data_type == "bkg":
+            return self.background_data
+        elif data_type == "sub":
+            return self.processed_data
+            
+    def click_sum_data(self):
 
-    #     data_type = self.check_data_type()
-    #     if data_type == "two_dim":
-    #         pass
-    #     elif data_type == "one_dim":
-    #         pass
-    #     else:
-    #         pass
+        for data_type in ["smp", "bkg","sub"]:
+            all_data = self.get_all_selected(data_type)
+            print(all_data)
+            if len(all_data) > 0:
+                data_dim = self.check_selected_data_dim(*all_data)
+                if data_dim == "two_dim":
+                    print("here")
+                    new_data = Data_2d(
+                        all_data[0].dir,
+                        all_data[0].ext,
+                        append_name( all_data[0].name + "_sum_" + str(len(all_data)), self.get_data_dict(data_type)),
+                        self.sum_2D(all_data),
+                        all_data[0].info
+                        )
+                    print(new_data)
+                    self.append_data(new_data, data_type)
+            elif data_dim == "one_dim":
+                pass
+            else:
+                pass
         
-    # def click_average_data(self):
-    #     pass
+    def click_average_data(self):
+        pass
     
-    # def check_data_type(self, x):
-    #     if isinstance(x, self.Data_2d):
-    #         return "two_dim"
-    #     elif isinstance(x, self.Data_1d):
-    #         return "one_dim"
+    def check_selected_data_dim(self, *args):
+        data_dim = None
+        for x in args:
+            if isinstance(x, Data_2d) and (data_dim == "two_dim" or data_dim is None) :
+                data_dim = "two_dim"
+            elif isinstance(x, Data_1d) and (data_dim == "one_dim" or data_dim is None):
+                data_dim = "one_dim"
+            elif isinstance(x, Data_1d) and data_dim == "two_dim":
+                return None
+            elif isinstance(x, Data_2d) and data_dim == "one_dim":
+                return None
+        return data_dim
 
-    # def sum_2D(self):
-    #     pass
+    def sum_2D(self, all_data):
+        sum = []
+        for item in all_data:
+            if sum == []:
+                sum = item.array
+            else:
+                sum = np.add(sum,item.array)
+        return sum
 
-    # def sum_1D(self):
-    #     pass
+
+    def sum_1D(self):
+        pass
     
     def onclick(self,event):
         '''
@@ -747,7 +782,7 @@ class Ui_MainWindow(object):
                     err,
                     {"type": data.info["type"]}
                 )
-                self.add_data(new_data, new_data.info['type'])
+                self.append_data(new_data, new_data.info['type'])
 
             elif action == rad_integrate:
                 item = self.get_plot_image_data()
@@ -763,7 +798,7 @@ class Ui_MainWindow(object):
                 I,
                 {"type":item.info["type"]}
                 )
-                self.add_data(data, data.info["type"])
+                self.append_data(data, data.info["type"])
                 self.clear_lists()
 
             #print(p3, " this is p3" )
@@ -785,7 +820,7 @@ class Ui_MainWindow(object):
             rotd_img = data.rotate(self.dsb_rot_ang.value())
             #print(rotd_img)
             name = "2d_rot_" + data.name.split('~')[1]
-            self.add_data(Data_2d_rot(data.dir, data.ext, name, rotd_img, data.info), data.info["type"])
+            self.append_data(Data_2d_rot(data.dir, data.ext, name, rotd_img, data.info), data.info["type"])
             self.set_plot_image_name(name,data.info["type"])
             self.plot_2D(rotd_img,name)
             self.clear_lists()
@@ -918,7 +953,7 @@ class Ui_MainWindow(object):
                 I,
                 {"type":item.info["type"]}
                 )
-                self.add_data(data, data.info["type"])
+                self.append_data(data, data.info["type"])
                 self.clear_lists()
 
                 #self.plot_2Daz(data.data) # put plotting here
@@ -963,7 +998,7 @@ class Ui_MainWindow(object):
                     az_image,
                     {"type":item.info["type"],"dim": "2D"}
                 )
-                self.add_data(data, data.info["type"])
+                self.append_data(data, data.info["type"])
                 self.plot_2Daz(data.array, data.name)
     
         return data    
@@ -1076,7 +1111,7 @@ class Ui_MainWindow(object):
                     err,
                     {"type": data.info["type"]}
                 )
-                self.add_data(new_data, new_data.info['type'])
+                self.append_data(new_data, new_data.info['type'])
 
         self.clear_lists()                              
 
@@ -1153,16 +1188,17 @@ class Ui_MainWindow(object):
             data_2d = None
             self.show_warning_messagebox("No data selected.")
             return data_2d
-
-    def get_all_selected(self):
+    
+    def get_all_selected(self, data_type="all"):
         all_data = []
-        if len(self.listWidget_smp.selectedIndexes()) != 0:
+        if len(self.listWidget_smp.selectedIndexes()) != 0 and (data_type == "all" or data_type == "smp"):
+            print("line 1195")
             for item in self.listWidget_smp.selectedIndexes():
                 all_data.append(self.sample_data[item.data()])
-        if len(self.listWidget_bkg.selectedIndexes()) != 0:        
+        if len(self.listWidget_bkg.selectedIndexes()) != 0 and (data_type == "all" or data_type == "bkg"):
             for item in self.listWidget_bkg.selectedIndexes():
                 all_data.append(self.background_data[item.data()])
-        if len(self.listWidget_processed.selectedIndexes()) != 0:
+        if len(self.listWidget_processed.selectedIndexes()) != 0 and (data_type == "all" or data_type == "sub"):
             for item in self.listWidget_processed.selectedIndexes():
                 all_data.append(self.processed_data[item.data()])
         return all_data
@@ -1334,7 +1370,7 @@ class Ui_MainWindow(object):
 
             corr_data = {'dir':data_2d.dir,'ext':data_2d.ext ,'name': "2D~" + "OLrm_" + data_2d.name.split("~")[1],'array': im_corr}
 
-            self.add_data(
+            self.append_data(
                 Data_2d(
                     corr_data['dir'],
                     corr_data['ext'],
@@ -1464,7 +1500,7 @@ class Ui_MainWindow(object):
         else:
             self.scale_max = int(maxindex)
     
-    def add_data(self, data, data_type):
+    def append_data(self, data, data_type):
         if data_type == "smp":
             data.name = append_name(data.name, self.sample_data)
             self.sample_data[data.name] = data
@@ -1495,7 +1531,7 @@ class Ui_MainWindow(object):
                     ) 
                     self.plot_2D(data.array,data.name)
                     self.set_plot_image_name(data.name,data.info['type'])
-                    self.add_data(data, data_type)
+                    self.append_data(data, data_type)
 
                 if item.split('.')[-1] == "h5":
                     if self.monitor_002:
@@ -1526,7 +1562,7 @@ class Ui_MainWindow(object):
                             dict['data'],
                             dict['info']
                         )
-                        self.add_data(data,data_type)
+                        self.append_data(data,data_type)
                         if self.saturated_pix_mask is False:
                             self.mask = make_saturated_mask(dict['data'].copy())
                             self.show_warning_messagebox("Saturated pixels with value 2^32-1 are masked.")
@@ -1548,7 +1584,7 @@ class Ui_MainWindow(object):
                             {"type": data_type},
                             err = raw_data[:,2]
                                                 )
-                        self.add_data(data,data_type)
+                        self.append_data(data,data_type)
                     except:
                         self.show_warning_messagebox("There is likely an issue with the header.")
 
