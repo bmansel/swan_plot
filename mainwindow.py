@@ -131,7 +131,7 @@ class Ui_MainWindow(object):
         self.verticalLayout = QtWidgets.QVBoxLayout(self.verticalLayoutWidget)
         self.verticalLayout.setContentsMargins(6, 6, 6, 6)
         self.verticalLayout.setObjectName("verticalLayout")
-        self.btn_import_smp = QtWidgets.QPushButton(self.verticalLayoutWidget, clicked = lambda: self.click_import_smp())
+        self.btn_import_smp = QtWidgets.QPushButton(self.verticalLayoutWidget, clicked = lambda: self.import_data("smp"))
         font = QtGui.QFont()
         font.setStyleName('Microsoft Sans Serif')
         font.setPointSize(11)
@@ -159,7 +159,7 @@ class Ui_MainWindow(object):
         self.verticalLayout_2 = QtWidgets.QVBoxLayout(self.verticalLayoutWidget_2)
         self.verticalLayout_2.setContentsMargins(6, 6, 6, 6)
         self.verticalLayout_2.setObjectName("verticalLayout_2")
-        self.btn_import_bkg = QtWidgets.QPushButton(self.verticalLayoutWidget_2, clicked = lambda: self.click_import_bkg())
+        self.btn_import_bkg = QtWidgets.QPushButton(self.verticalLayoutWidget_2, clicked = lambda: self.import_data("bkg"))
         font = QtGui.QFont()
         font.setStyleName('Microsoft Sans Serif')
         font.setPointSize(11)
@@ -188,7 +188,7 @@ class Ui_MainWindow(object):
         self.verticalLayout_3 = QtWidgets.QVBoxLayout(self.verticalLayoutWidget_3)
         self.verticalLayout_3.setContentsMargins(6, 6, 6, 6)
         self.verticalLayout_3.setObjectName("verticalLayout_3")
-        self.btn_import_subd = QtWidgets.QPushButton(self.verticalLayoutWidget_3, clicked = lambda: self.click_import_sub())
+        self.btn_import_subd = QtWidgets.QPushButton(self.verticalLayoutWidget_3, clicked = lambda: self.import_data("sub"))
         font = QtGui.QFont()
         font.setStyleName('Microsoft Sans Serif')
         font.setPointSize(11)
@@ -594,7 +594,7 @@ class Ui_MainWindow(object):
         self.label_2.setText(_translate("MainWindow", "Threshold:"))
         self.btn_remove_outliers.setText(_translate("MainWindow", "Apply to selected"))
         self.btn_2d_subtract.setText(_translate("MainWindow", "2D subtraction"))
-        self.btn_2d_integrate.setText(_translate("MainWindow", "2D integration"))
+        self.btn_2d_integrate.setText(_translate("MainWindow", "2D integrate"))
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab), _translate("MainWindow", "2D Tools"))
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab_2), _translate("MainWindow", "1D Tools"))
         self.btn_2d_subtract.setText(_translate("MainWindow", "2D subtract"))
@@ -639,22 +639,31 @@ class Ui_MainWindow(object):
     #     openAct = contextMenu.addAction("Open")
     #     quitAct = contextMenu.addAction("Quit")
     #     action = contextMenu.exec_(self.mapToGlobal(event.pos()))
+
+    # def click_sum_data(self):
+
+    #     data_type = self.check_data_type()
+    #     if data_type == "two_dim":
+    #         pass
+    #     elif data_type == "one_dim":
+    #         pass
+    #     else:
+    #         pass
         
+    # def click_average_data(self):
+    #     pass
     
-    def click_import_smp(self):
-        self.import_data("smp")
+    # def check_data_type(self, x):
+    #     if isinstance(x, self.Data_2d):
+    #         return "two_dim"
+    #     elif isinstance(x, self.Data_1d):
+    #         return "one_dim"
 
-    def click_import_bkg(self):
-        self.import_data("bkg")
+    # def sum_2D(self):
+    #     pass
 
-    def click_import_sub(self):
-        self.import_data("sub")
-
-    def click_sum_data(self):
-        pass
-        
-    def click_average_data(self):
-        pass
+    # def sum_1D(self):
+    #     pass
     
     def onclick(self,event):
         '''
