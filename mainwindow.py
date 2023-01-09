@@ -649,30 +649,65 @@ class Ui_MainWindow(object):
             return self.processed_data
             
     def click_sum_data(self):
-
         for data_type in ["smp", "bkg","sub"]:
             all_data = self.get_all_selected(data_type)
-            print(all_data)
             if len(all_data) > 0:
                 data_dim = self.check_selected_data_dim(*all_data)
                 if data_dim == "two_dim":
-                    print("here")
                     new_data = Data_2d(
                         all_data[0].dir,
                         all_data[0].ext,
-                        append_name( all_data[0].name + "_sum_" + str(len(all_data)), self.get_data_dict(data_type)),
+                        append_name( all_data[0].name + "_sum_" + str(len(all_data)) + "_0", self.get_data_dict(data_type)),
                         self.sum_2D(all_data),
                         all_data[0].info
                         )
-                    print(new_data)
                     self.append_data(new_data, data_type)
-            elif data_dim == "one_dim":
-                pass
-            else:
-                pass
+                elif data_dim == "one_dim":
+                    I, err = self.sum_1D(all_data)
+                    new_data = Data_1d(
+                        all_data[0].dir,
+                        all_data[0].ext,
+                        append_name( all_data[0].name + "_sum_" + str(len(all_data)) + "_0", self.get_data_dict(data_type)), 
+                        all_data[0].q, 
+                        I, 
+                        err, 
+                        all_data[0].info
+                        )
+                    self.append_data(new_data, data_type)
+                else:
+                    # the other case is handled in the check_selected_data_dim function
+                    pass
+                    
         
     def click_average_data(self):
-        pass
+        for data_type in ["smp", "bkg","sub"]:
+            all_data = self.get_all_selected(data_type)
+            if len(all_data) > 0:
+                data_dim = self.check_selected_data_dim(*all_data)
+                if data_dim == "two_dim":
+                    new_data = Data_2d(
+                        all_data[0].dir,
+                        all_data[0].ext,
+                        append_name( all_data[0].name + "_avg_" + str(len(all_data)) + "_0", self.get_data_dict(data_type)),
+                        np.divide(self.sum_2D(all_data), len(all_data)),
+                        all_data[0].info
+                        )
+                    self.append_data(new_data, data_type)
+                elif data_dim == "one_dim":
+                    I, err = self.avg_1D(all_data)
+                    new_data = Data_1d(
+                        all_data[0].dir,
+                        all_data[0].ext,
+                        append_name( all_data[0].name + "_avg_" + str(len(all_data)) + "_0", self.get_data_dict(data_type)), 
+                        all_data[0].q, 
+                        np.divide(I,len(all_data)) , 
+                        np.divide(err,len(all_data)), 
+                        all_data[0].info
+                        )
+                    self.append_data(new_data, data_type)
+                else:
+                    # the other case is handled in the check_selected_data_dim function
+                    pass
     
     def check_selected_data_dim(self, *args):
         data_dim = None
@@ -682,23 +717,47 @@ class Ui_MainWindow(object):
             elif isinstance(x, Data_1d) and (data_dim == "one_dim" or data_dim is None):
                 data_dim = "one_dim"
             elif isinstance(x, Data_1d) and data_dim == "two_dim":
+                self.show_warning_messagebox("Mixture of 1D and 2D data.")
                 return None
             elif isinstance(x, Data_2d) and data_dim == "one_dim":
+                self.show_warning_messagebox("Mixture of 1D and 2D data.")
                 return None
         return data_dim
 
     def sum_2D(self, all_data):
         sum = []
         for item in all_data:
-            if sum == []:
+            if len(sum) == 0:
                 sum = item.array
             else:
                 sum = np.add(sum,item.array)
         return sum
 
 
-    def sum_1D(self):
-        pass
+    def avg_1D(self,all_data):
+        sum_I = []
+        sum_err2 = []
+        for item in all_data:
+            if len(sum_I) == 0:
+                sum_I = item.I
+                sum_err2 = np.power(item.err,2)
+            else:
+                sum_I = np.add(sum_I,item.I)
+                sum_err2 = np.add(sum_err2, np.power(item.err,2))
+        # check the divide by N or N-1
+        return np.divide(sum_I,len(all_data)), np.sqrt(np.divide(sum_err2,len(all_data)))
+    
+    def sum_1D(self, all_data):
+        sum_I = []
+        sum_err2 = []
+        for item in all_data:
+            if len(sum_I) == 0:
+                sum_I = item.I
+                sum_err2 = np.power(item.err,2)
+            else:
+                sum_I = np.add(sum_I,item.I)
+                sum_err2 = np.add(sum_err2, np.power(item.err,2))
+        return sum_I, np.sqrt(sum_err2)
     
     def onclick(self,event):
         '''
@@ -1192,7 +1251,6 @@ class Ui_MainWindow(object):
     def get_all_selected(self, data_type="all"):
         all_data = []
         if len(self.listWidget_smp.selectedIndexes()) != 0 and (data_type == "all" or data_type == "smp"):
-            print("line 1195")
             for item in self.listWidget_smp.selectedIndexes():
                 all_data.append(self.sample_data[item.data()])
         if len(self.listWidget_bkg.selectedIndexes()) != 0 and (data_type == "all" or data_type == "bkg"):
