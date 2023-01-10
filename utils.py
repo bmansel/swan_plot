@@ -44,9 +44,11 @@ import random
 #     #combined_mask[combined_mask > 1] = 1
 #     return np.array(combined_mask)
 
-def make_saturated_mask(frame):
-    # mask vales are 2^32-1 = 4294967295 for 32 bit image
-    maskPixels = np.squeeze(np.where(frame == 4294967295))
+def make_saturated_mask(frame, bit_depth):
+    # mask vales are 2^bit_depth-1 
+    maskPixels = np.squeeze(np.where(frame == 2**bit_depth - 1))
+    print(np.sum(maskPixels))
+    #print(np.sum(maskPixels))
     frame.fill(0)
     # for pyFAI masked values are 1 and rest are 0
     frame[maskPixels[0], maskPixels[1]] = 1

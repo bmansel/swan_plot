@@ -556,6 +556,9 @@ class Ui_MainWindow(object):
 
         self.monitor_002 = False
         self.mask = None
+        self.bit_depth = None
+        self.show_warning_messagebox("The Y direct beam input box is now set to be consistant with pyFAI not FIT2d. For the LFP image and FIT2d use 2352 - Y direct beam. The best option is to always use a .poni file.")
+        
 
         self.sample_data = {}
         self.background_data = {}
@@ -661,6 +664,7 @@ class Ui_MainWindow(object):
                         self.sum_2D(all_data),
                         all_data[0].info
                         )
+                    new_data.array = self.check_overflow_pix(new_data.array, new_data.name)
                     self.append_data(new_data, data_type)
                 elif data_dim == "one_dim":
                     I, err = self.sum_1D(all_data)
@@ -725,13 +729,13 @@ class Ui_MainWindow(object):
         return data_dim
 
     def sum_2D(self, all_data):
-        sum = []
+        cur_sum = []
         for item in all_data:
-            if len(sum) == 0:
-                sum = item.array
+            if len(cur_sum) == 0:
+                cur_sum = item.array
             else:
-                sum = np.add(sum,item.array)
-        return sum
+                cur_sum = np.add(cur_sum,item.array, dtype='int64')
+        return cur_sum
 
 
     def avg_1D(self,all_data):
@@ -1335,19 +1339,58 @@ class Ui_MainWindow(object):
         self.listWidget_smp.clearSelection()
         self.listWidget_bkg.clearSelection()
         self.listWidget_processed.clearSelection()
+        
+    
+    def check_overflow_pix(self, array, name):
+        num_high_pix = self.count_overflow_pix(array.copy())
+        print(num_high_pix)
+        print(array.dtype)
+        print(np.max(array))
+        if num_high_pix > 0 and self.bit_depth < 32:
+            dlg = QtWidgets.QMessageBox(MainWindow)
+            dlg.setWindowTitle("Pixel(s) overflowing, convert to higher bit depth")
+            dlg.setText(str(num_high_pix) + " saturated pixels in image " + name + ", select yes to set image type to " + str(2*self.bit_depth) +" bit or no to set satureated values to " + str(2**self.bit_depth - 1))
+            dlg.setStandardButtons(QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No)
+            dlg.setIcon(QtWidgets.QMessageBox.Question)
+            button = dlg.exec()
+            if button == QtWidgets.QMessageBox.Yes:
+                self.bit_depth *= 2
+                return array
+            else:
+                return self.set_overflow_pix_saturated(array.copy())
+
+        elif num_high_pix > 0 and self.bit_depth == 32:
+            self.set_overflow_pix_saturated(array.copy())
+            self.show_warning_messagebox(str(num_high_pix) + " saturated pixels in image, as this is a 32 bit image all saturated pixels will be set to" + str(2**self.bit_depth -1))
+            return self.set_overflow_pix_saturated(array.copy())
+        else:
+            return array
+
+    def set_overflow_pix_saturated(self,a):
+        overflow_pix = np.squeeze(np.where(a > 2**self.bit_depth - 1))
+        a[overflow_pix[0], overflow_pix[1]] = 2**self.bit_depth - 1
+        return np.array(a) #, dtype = "int"+str(self.bit_depth))
+
+    def count_overflow_pix(self, a):
+        overflow_pix = np.squeeze(np.where(a >= 2**self.bit_depth - 1))
+        a.fill(0)
+        a[overflow_pix[0], overflow_pix[1]] = 1
+        return np.sum(a)
 
     def export_single_image(self,data):
-        if data.ext == 'h5':
-            data.data = data.data.astype('int32')
-        elif data.ext == 'tif':
-            data.data = data.data.astype('int16')
-        
+        if self.bit_depth == 32:
+            data.array = data.array.astype('int32')
+        elif self.bit_depth == 16:
+            data.array = data.array.astype('int16')
+        elif self.bit_depth == 8:
+            data.array = data.array.astype('int8')
+
         path = os.path.join(data.dir, data.name.split("~")[1] + '.' + 'tif') # always save as tif
         if os.path.exists(path):
             old_path = path
             path = self.append_file(path)
             self.show_warning_messagebox('File ' + old_path + ' found, saving to ' + path)
-        tifffile.imwrite(path, data.data)
+        tifffile.imwrite(path, data.array, data.array.dtype)
         self.clear_lists()
 
     def export_single_dat(self, data):
@@ -1573,6 +1616,28 @@ class Ui_MainWindow(object):
             self.processed_data[data.name] = data
             self.listWidget_processed.addItem(self.processed_data[data.name].name)
     
+    def set_bit_depth(self,array):
+        print(array.dtype)
+        if array.dtype == 'uint8' or array.dtype == 'int8':
+            self.bit_depth = 8
+        elif array.dtype == 'uint16' or array.dtype == 'int16':
+            self.bit_depth = 16
+        elif array.dtype == 'uint32' or array.dtype == 'int32':
+            self.bit_depth = 32
+        else:
+            self.show_warning_messagebox('Image appears to be neither a 8, 16, or 32 bit image. This is currently not supported.')
+
+    def init_image_import(self, array):
+        if self.bit_depth is None:
+            self.set_bit_depth(array)
+            self.show_warning_messagebox("Image bit depth of " + str(self.bit_depth) + " found and will be used for writing and manipulating images, please be aware of bit overflow\nMax value for images is " + str(2**self.bit_depth - 1))
+
+        if self.saturated_pix_mask is False:
+            self.mask = make_saturated_mask(array, self.bit_depth)
+            self.show_warning_messagebox("Masked " + str(np.sum(self.mask)) + " saturated pixels which had values of 2^" + str(self.bit_depth) +"-1")
+            self.saturated_pix_mask = True
+
+    
     def import_data(self,data_type):
         #open file dialog returns a tuple
         fnames, _ = QtWidgets.QFileDialog.getOpenFileNames(MainWindow, "Select multiple files", "", " tif Image (*.tif);;h5 Image (*master.h5);;1D data (*.dat);;All Files (*)")
@@ -1587,7 +1652,10 @@ class Ui_MainWindow(object):
                         tifffile.imread(item),
                         {"type": data_type}
                     ) 
+                    
                     self.plot_2D(data.array,data.name)
+                    self.init_image_import(data.array.copy())
+
                     self.set_plot_image_name(data.name,data.info['type'])
                     self.append_data(data, data_type)
 
@@ -1605,9 +1673,9 @@ class Ui_MainWindow(object):
                         }
                         if imgData.nframes > 1:
                             dict['data'] = imgData.getframe(num).data
+                            
                         else:
                             dict['data'] = imgData.data
-                        
                         if self.monitor_002:
                             dict['info']['civi'] = civi[num]
                             dict['info']['rigi'] = rigi[num]
@@ -1621,10 +1689,14 @@ class Ui_MainWindow(object):
                             dict['info']
                         )
                         self.append_data(data,data_type)
-                        if self.saturated_pix_mask is False:
-                            self.mask = make_saturated_mask(dict['data'].copy())
-                            self.show_warning_messagebox("Saturated pixels with value 2^32-1 are masked.")
-                            self.saturated_pix_mask = True
+                        self.init_image_import(dict['data'].copy())
+                        # if self.bit_depth is None:
+                        #     self.set_bit_depth(data.array)
+
+                        # if self.saturated_pix_mask is False:
+                        #     self.mask = make_saturated_mask(dict['data'].copy())
+                        #     self.show_warning_messagebox("Saturated pixels with value 2^32-1 are masked.")
+                        #     self.saturated_pix_mask = True
                     self.plot_2D(data.array,data.name)
                     self.set_plot_image_name(data.name,data.info['type'])
                     
