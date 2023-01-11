@@ -561,14 +561,14 @@ class Ui_MainWindow(object):
         
         dlg = QtWidgets.QMessageBox(MainWindow)
         dlg.setWindowTitle("Use FIT2d mode?")
-        dlg.setText("FIT2d uses flipped images, Select Yes to set FIT2d mode and directly enter calibration values outputted from FIT2d. Otherwise select No and input a .poni file.")
+        dlg.setText("FIT2d uses flipped images, select Yes to set FIT2d mode and directly enter calibration values outputted from FIT2d. Otherwise select No and input a .poni file.")
         dlg.setStandardButtons(QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No)
         dlg.setIcon(QtWidgets.QMessageBox.Question)
         button = dlg.exec()
         if button == QtWidgets.QMessageBox.Yes:
             self.fit2d_mode = True
         else:
-            self.fit2d_mode = True
+            self.fit2d_mode = False
 
         self.sample_data = {}
         self.background_data = {}
@@ -1665,7 +1665,7 @@ class Ui_MainWindow(object):
                         {"type": data_type}
                     ) 
 
-                    if self.fit2d_mode == True:
+                    if self.fit2d_mode:
                         data.array = np.flipud(data.array)
                     
                     self.plot_2D(data.array,data.name)
@@ -1703,8 +1703,8 @@ class Ui_MainWindow(object):
                             dict['data'],
                             dict['info']
                         )
-                        if self.fit2d_mode == True:
-                            data.array = np.flipud(data['data'])
+                        if self.fit2d_mode:
+                            data.array = np.flipud(data.array)
                         self.append_data(data,data_type)
                         self.init_image_import(dict['data'].copy())
                         # if self.bit_depth is None:
