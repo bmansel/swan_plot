@@ -1158,6 +1158,10 @@ class Ui_MainWindow(object):
         self.clear_lists()      
 
     def click_integrate(self):
+
+        # need to add the scale factor lineEdit    
+        scale_factor = 1
+
         for data in self.get_all_selected():
             if isinstance(data,Data_2d) and self.ai:
                 if data.info["type"] == "smp":
@@ -1166,13 +1170,15 @@ class Ui_MainWindow(object):
                     normValue = float(self.lineEdit_bkg_TM.text().strip())
                 else:
                     normValue = 1
+                if self.monitor_002:
+                    normValue *= data.info["civi"]
                 q, I, err = data.integrate_image(
                     self.ai,
                     self.sb_q_bins.value(),
                     self.dsb_chi_start.value(),
                     self.dsb_chi_end.value(),
                     self.mask,
-                    normValue
+                    normValue / scale_factor
                 )
                 
                 new_data = Data_1d(
@@ -1798,12 +1804,12 @@ class Ui_MainWindow(object):
 
                 scale_factor = 1
 
-                if self.monitor_002:
-                    civi_smp = self.sample_data[index.data()].info['civi']
-                    civi_bkg = self.background_data[bkg_name].info['civi']
-                else:
-                    civi_smp = 1
-                    civi_bkg = 1
+                # if self.monitor_002:
+                #     civi_smp = self.sample_data[index.data()].info['civi']
+                #     civi_bkg = self.background_data[bkg_name].info['civi']
+                # else:
+                civi_smp = 1
+                civi_bkg = 1
 
                 part1 = np.divide(smp_data * scale_factor, float(self.lineEdit_smp_TM.text()) * civi_smp )
                 part2 = np.divide(bkg_data * scale_factor, float(self.lineEdit_bkg_TM.text()) * civi_bkg )
