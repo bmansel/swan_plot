@@ -557,8 +557,18 @@ class Ui_MainWindow(object):
         self.monitor_002 = False
         self.mask = None
         self.bit_depth = None
-        self.show_warning_messagebox("The Y direct beam input box is now set to be consistant with pyFAI not FIT2d. For the LFP image and FIT2d use 2352 - Y direct beam. The best option is to always use a .poni file.")
+        #self.show_warning_messagebox("The Y direct beam input box is now set to be consistant with pyFAI not FIT2d. For the LFP image and FIT2d use 2352 - Y direct beam. The best option is to always use a .poni file.")
         
+        dlg = QtWidgets.QMessageBox(MainWindow)
+        dlg.setWindowTitle("Use FIT2d mode?")
+        dlg.setText("FIT2d uses flipped images, Select Yes to set FIT2d mode and directly enter calibration values outputted from FIT2d. Otherwise select No and input a .poni file.")
+        dlg.setStandardButtons(QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No)
+        dlg.setIcon(QtWidgets.QMessageBox.Question)
+        button = dlg.exec()
+        if button == QtWidgets.QMessageBox.Yes:
+            self.fit2d_mode = True
+        else:
+            self.fit2d_mode = True
 
         self.sample_data = {}
         self.background_data = {}
@@ -1179,6 +1189,8 @@ class Ui_MainWindow(object):
         self.clear_lists()                              
 
     def click_load_PONI(self):
+        if self.fit2d_mode:
+            self.show_warning_messagebox("FIT2d mode is currently set so the image is flipped compared to .poni orientation. Please restart and set no to FIT2d option or proceed with care!")
         fname, _ = QtWidgets.QFileDialog.getOpenFileName(MainWindow, "Select PONI file", "", "PONI (*.poni);;All Files (*)")
         if fname and fname != "":
             self.ai = pyFAI.load(fname)
@@ -1652,6 +1664,9 @@ class Ui_MainWindow(object):
                         tifffile.imread(item),
                         {"type": data_type}
                     ) 
+
+                    if self.fit2d_mode == True:
+                        data.array = np.flipud(data.array)
                     
                     self.plot_2D(data.array,data.name)
                     self.init_image_import(data.array.copy())
@@ -1688,6 +1703,8 @@ class Ui_MainWindow(object):
                             dict['data'],
                             dict['info']
                         )
+                        if self.fit2d_mode == True:
+                            data.array = np.flipud(data['data'])
                         self.append_data(data,data_type)
                         self.init_image_import(dict['data'].copy())
                         # if self.bit_depth is None:
