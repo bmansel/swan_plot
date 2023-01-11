@@ -365,6 +365,13 @@ class Ui_MainWindow(object):
         self.lineEdit_angDetTilt = QtWidgets.QLineEdit(self.groupBox_6)
         self.lineEdit_angDetTilt.setGeometry(QtCore.QRect(10, 240, 113, 25))
         self.lineEdit_angDetTilt.setObjectName("lineEdit_angDetTilt")
+        self.dsb_scale_factor = QtWidgets.QDoubleSpinBox(self.groupBox_6)
+        self.dsb_scale_factor.setGeometry(QtCore.QRect(10, 400, 113, 25))
+        self.dsb_scale_factor.setObjectName("dsb_scale_factor")
+        self.dsb_scale_factor.setMinimum(0)
+        self.dsb_scale_factor.setMaximum(10000000000)
+        self.dsb_scale_factor.setDecimals(8)
+        self.dsb_scale_factor.setValue(1.0)
         self.label_3 = QtWidgets.QLabel(self.groupBox_6)
         self.label_3.setGeometry(QtCore.QRect(130, 34, 151, 17))
         self.label_3.setObjectName("label_3")
@@ -389,6 +396,9 @@ class Ui_MainWindow(object):
         self.label_10 = QtWidgets.QLabel(self.groupBox_6)
         self.label_10.setGeometry(QtCore.QRect(130, 244, 241, 17))
         self.label_10.setObjectName("label_10")
+        self.label_11 = QtWidgets.QLabel(self.groupBox_6)
+        self.label_11.setGeometry(QtCore.QRect(130, 404, 241, 17))
+        self.label_11.setObjectName("label_10")
         self.btn_load_PONI = QtWidgets.QPushButton(self.groupBox_6,clicked=lambda: self.click_load_PONI())
         self.btn_load_PONI.setGeometry(QtCore.QRect(10, 280, 91, 25))
         self.btn_load_PONI.setObjectName("btn_load_PONI")
@@ -625,6 +635,7 @@ class Ui_MainWindow(object):
         self.label_8.setText(_translate("MainWindow", "Y dir. Beam [Pix.]"))
         self.label_9.setText(_translate("MainWindow", "Rot. ang. tilt plane [deg.]"))
         self.label_10.setText(_translate("MainWindow", "Ang of det. tilt in plane [deg.]"))
+        self.label_11.setText(_translate("MainWindow", "Scale factor (1d data)"))
         self.btn_load_PONI.setText(_translate("MainWindow", "Load PONI"))
         self.btn_load_mask.setText(_translate("MainWindow", "Load mask"))
         self.btn_load_reject.setText(_translate("MainWindow", "Load reject"))
@@ -837,6 +848,7 @@ class Ui_MainWindow(object):
                     normValue = float(self.lineEdit_bkg_TM.text().strip())
                 else:
                     normValue = 1
+                
                 q, I, err = data.integrate_image(
                     self.ai,
                     self.sb_q_bins.value(),
@@ -845,6 +857,7 @@ class Ui_MainWindow(object):
                     self.mask,
                     normValue
                 )
+                    
                 
                 new_data = Data_1d(
                     data.dir,
@@ -1159,9 +1172,6 @@ class Ui_MainWindow(object):
 
     def click_integrate(self):
 
-        # need to add the scale factor lineEdit    
-        scale_factor = 1
-
         for data in self.get_all_selected():
             if isinstance(data,Data_2d) and self.ai:
                 if data.info["type"] == "smp":
@@ -1172,15 +1182,19 @@ class Ui_MainWindow(object):
                     normValue = 1
                 if self.monitor_002:
                     normValue *= data.info["civi"]
+                
+                #count =0
+                #while count < 1000:
                 q, I, err = data.integrate_image(
                     self.ai,
                     self.sb_q_bins.value(),
                     self.dsb_chi_start.value(),
                     self.dsb_chi_end.value(),
                     self.mask,
-                    normValue / scale_factor
+                    normValue / self.dsb_scale_factor.value()
                 )
-                
+                    #count += 1
+
                 new_data = Data_1d(
                     data.dir,
                     "dat",

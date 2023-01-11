@@ -2,7 +2,7 @@
 This is it
 
 '''
-
+from time import perf_counter
 import sys 
 #sys.path.insert(0, "/opt/dectris/albula/4.1/bin") 
 #sys.path.insert(0, "/opt/dectris/albula/4.1/python") 
@@ -47,8 +47,6 @@ import random
 def make_saturated_mask(frame, bit_depth):
     # mask vales are 2^bit_depth-1 
     maskPixels = np.squeeze(np.where(frame == 2**bit_depth - 1))
-    print(np.sum(maskPixels))
-    #print(np.sum(maskPixels))
     frame.fill(0)
     # for pyFAI masked values are 1 and rest are 0
     frame[maskPixels[0], maskPixels[1]] = 1
@@ -541,7 +539,7 @@ class Data_2d:
     
     
     def integrate_image(self, ai, q_bins, chi_start,chi_end, mask, normValue):
-
+        #t1_start = perf_counter()
         q, I, err = ai.integrate1d(
             self.array,
              q_bins,
@@ -556,11 +554,12 @@ class Data_2d:
             polarization_factor=None, 
             dark=None, 
             flat=None, 
-            method='cython', 
+            method=("bbox", "csr", "cython"), #'cython'
             unit='q_A^-1', 
             safe=False, 
             normalization_factor=normValue, 
             metadata=None)
+        #print("Elapsed time during the whole program in seconds:", str(perf_counter()-t1_start))
         return q, I, err
 
 
