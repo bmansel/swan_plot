@@ -1190,6 +1190,7 @@ class Ui_MainWindow(object):
                 
                 #count =0
                 #while count < 1000:
+
                 q, I, err = data.integrate_image(
                     self.ai,
                     self.sb_q_bins.value(),
