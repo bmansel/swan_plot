@@ -539,27 +539,30 @@ class Data_2d:
     
     
     def integrate_image(self, ai, q_bins, chi_start,chi_end, mask, normValue):
-        #t1_start = perf_counter()
-        q, I, err = ai.integrate1d(
-            self.array,
-             q_bins,
-            correctSolidAngle=True,
-            variance=None,
-            error_model="poisson",
-            radial_range=None, 
-            azimuth_range=(chi_start,chi_end), 
-            mask=mask,
-            dummy=None, 
-            delta_dummy=None, 
-            polarization_factor=None, 
-            dark=None, 
-            flat=None, 
-            method=("bbox", "csr", "cython"), #'cython'
-            unit='q_A^-1', 
-            safe=False, 
-            normalization_factor=normValue, 
-            metadata=None)
-        #print("Elapsed time during the whole program in seconds:", str(perf_counter()-t1_start))
+        t1_start = perf_counter()
+        count = 0
+        while count < 1000:
+            q, I, err = ai.integrate1d(
+                self.array,
+                q_bins,
+                correctSolidAngle=True,
+                variance=None,
+                error_model="poisson",
+                radial_range=None, 
+                azimuth_range=(chi_start,chi_end), 
+                mask=mask,
+                dummy=None, 
+                delta_dummy=None, 
+                polarization_factor=None, 
+                dark=None, 
+                flat=None, 
+                method=("bbox", "csr", "cython"), #'cython'
+                unit='q_A^-1', 
+                safe=False, 
+                normalization_factor=normValue, 
+                metadata=None)
+            count += 1
+        print("Elapsed time during the whole program in seconds:", str(perf_counter()-t1_start))
         return q, I, err
 
 

@@ -45,8 +45,8 @@ class Ui_MainWindow(object):
         MainWindow.resize(1000, 900)
         #####################################################################
         # not needed on linux etc
-        myappid = u'SWAN_plot'
-        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid) 
+        #myappid = u'SWAN_plot'
+        #ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid) 
         #####################################################################
         MainWindow.setWindowIcon(QtGui.QIcon('../images/icon.png'))
         self.centralwidget = QtWidgets.QWidget(MainWindow)
