@@ -891,8 +891,7 @@ class Ui_MainWindow(object):
             #print(p3, " this is p3" )
             #print(p2, " this is p2" )
             #print(np.rad2deg(angle + np.pi / 2))
-
-            
+    
 
     def no_data_selected(self):
         if (not self.listWidget_smp.selectedItems() and 
@@ -901,16 +900,19 @@ class Ui_MainWindow(object):
             return True
 
     def click_rot_img(self):
-        #data = self.get_first_sel()
-        data = self.get_plot_image_data()
-        if isinstance(data,Data_2d):
-            rotd_img = data.rotate(self.dsb_rot_ang.value())
-            #print(rotd_img)
-            name = "2d_rot_" + data.name.split('~')[1]
-            self.append_data(Data_2d_rot(data.dir, data.ext, name, rotd_img, data.info), data.info["type"])
-            self.set_plot_image_name(name,data.info["type"])
-            self.plot_2D(rotd_img,name)
-            self.clear_lists()
+        if self.ai is None:
+            self.no_ai_found_error()
+        else:
+            #data = self.get_first_sel()
+            data = self.get_plot_image_data()
+            if isinstance(data,Data_2d):
+                rotd_img = data.rotate(self.dsb_rot_ang.value())
+                #print(rotd_img)
+                name = "2d_rot_" + data.name.split('~')[1]
+                self.append_data(Data_2d_rot(data.dir, data.ext, name, rotd_img, data.info), data.info["type"])
+                self.set_plot_image_name(name,data.info["type"])
+                self.plot_2D(rotd_img,name)
+                self.clear_lists()
 
     def click_load_reject(self):
         fname, _ = QtWidgets.QFileDialog.getOpenFileName(MainWindow, 
@@ -1026,24 +1028,36 @@ class Ui_MainWindow(object):
     
     
     def click_integrate_radial(self):
-        for item in self.get_all_selected():
-            if isinstance(item, Data_2d):
-                chi, I = self.integrate_radial(item)
-                if len(I) < 2:
-                    self.show_warning_messagebox("Warning, length of data is less than 2!!")
-                    return
-                data = Data_1d_az(
-                item.dir,
-                "dat",
-                "1Daz~" + item.name.split("~")[1],
-                chi,
-                I,
-                {"type":item.info["type"]}
-                )
-                self.append_data(data, data.info["type"])
-                self.clear_lists()
+        if self.ai is None:
+            self.no_ai_found_error()
+        else:
+            self.figure2.clear()
+            ax2 =  self.figure2.add_subplot(111)
+            for item in self.get_all_selected():
+                if isinstance(item, Data_2d):
+                    chi, I = self.integrate_radial(item)
+                    if len(I) < 2:
+                        self.show_warning_messagebox("Warning, length of data is less than 2!!")
+                        return
+                    data = Data_1d_az(
+                    item.dir,
+                    "dat",
+                    "1Daz~" + item.name.split("~")[1],
+                    chi,
+                    I,
+                    {"type":item.info["type"]}
+                    )
+                    self.append_data(data, data.info["type"])
+                    self.plot_1D_az(
+                        ax2,
+                        data.chi,
+                        data.I,
+                        data.name.split("~")[1]
+                    )
+            self.canvas2.draw()
+            self.clear_lists()
 
-                #self.plot_2Daz(data.data) # put plotting here
+                    #self.plot_2Daz(data.data) # put plotting here
 
     def integrate_radial(self,data):
         if data.info["type"] == "smp":
@@ -1076,8 +1090,7 @@ class Ui_MainWindow(object):
    
     def click_integrate_2D(self):
         if self.ai is None:
-            self.show_warning_messagebox(
-                "Scattering geometry information is not found, input a .poni file or information from fit 2d")
+            self.no_ai_found_error()
         else:
             for item in self.get_all_selected():
                 if isinstance(item, Data_2d):
@@ -1175,44 +1188,60 @@ class Ui_MainWindow(object):
                 self.listWidget_processed.addItem(out.name)
         self.clear_lists()      
 
+    def no_ai_found_error(self):
+        self.show_warning_messagebox("Scattering geometry information is not found, input a .poni file or information from fit 2d", title="Error")
+    
     def click_integrate(self):
+        if self.ai is None:
+            self.no_ai_found_error()
+        else:
+            self.figure2.clear()
+            ax2 =  self.figure2.add_subplot(111)
+            for data in self.get_all_selected():
+                if isinstance(data,Data_2d) and self.ai:
+                    
+                    if data.info["type"] == "smp":
+                        normValue = float(self.lineEdit_smp_TM.text().strip())
+                    elif data.info["type"] == "bkg":    
+                        normValue = float(self.lineEdit_bkg_TM.text().strip())
+                    else:
+                        normValue = 1
+                    if self.monitor_002:
+                        normValue *= data.info["civi"]
+                    
+                    #count =0
+                    #while count < 1000:
 
-        for data in self.get_all_selected():
-            if isinstance(data,Data_2d) and self.ai:
-                if data.info["type"] == "smp":
-                    normValue = float(self.lineEdit_smp_TM.text().strip())
-                elif data.info["type"] == "bkg":    
-                    normValue = float(self.lineEdit_bkg_TM.text().strip())
-                else:
-                    normValue = 1
-                if self.monitor_002:
-                    normValue *= data.info["civi"]
-                
-                #count =0
-                #while count < 1000:
+                    q, I, err = data.integrate_image(
+                        self.ai,
+                        self.sb_q_bins.value(),
+                        self.dsb_chi_start.value(),
+                        self.dsb_chi_end.value(),
+                        self.mask,
+                        normValue / self.dsb_scale_factor.value()
+                    )
+                        #count += 1
 
-                q, I, err = data.integrate_image(
-                    self.ai,
-                    self.sb_q_bins.value(),
-                    self.dsb_chi_start.value(),
-                    self.dsb_chi_end.value(),
-                    self.mask,
-                    normValue / self.dsb_scale_factor.value()
-                )
-                    #count += 1
+                    new_data = Data_1d(
+                        data.dir,
+                        "dat",
+                        "1D~" + data.name.split("~")[1],
+                        q,
+                        I,
+                        err,
+                        {"type": data.info["type"]}
+                    )
+                    self.append_data(new_data, new_data.info['type'])
+                    
+                    self.plot_1D_1D_data( 
+                        ax2, 
+                        new_data.q, 
+                        new_data.I, new_data.err, 
+                        new_data.name.split("~")[1]
+                        )
 
-                new_data = Data_1d(
-                    data.dir,
-                    "dat",
-                    "1D~" + data.name.split("~")[1],
-                    q,
-                    I,
-                    err,
-                    {"type": data.info["type"]}
-                )
-                self.append_data(new_data, new_data.info['type'])
-
-        self.clear_lists()                              
+            self.canvas2.draw()
+            self.clear_lists()                             
 
     def click_load_PONI(self):
         if self.fit2d_mode:
@@ -1522,6 +1551,23 @@ class Ui_MainWindow(object):
             
         self.clear_lists()
 
+    def plot_1D_1D_data(self, axis, q, I, err, label):
+        axis.errorbar(q,I,yerr=err,label=label)
+        #plt.plot(item.q,item.I,label=item.name)
+        axis.set_xscale('log')
+        axis.set_yscale('log')
+        axis.set_xlabel('q [Ang.^-1]')
+        axis.set_ylabel('I(q) [arb. units]')
+        axis.legend(fontsize=9)
+
+    def plot_1D_az(self, axis, chi, I, label):
+        axis.plot(chi,I,label=label)
+        axis.set_xscale('linear')
+        axis.set_yscale('linear')
+        axis.set_xlabel('chi [deg.]')
+        axis.set_ylabel('I(q) [arb. units]')
+        axis.legend(fontsize=9)
+
     def plot_1D(self):
         # clearing old figure
         #self.tabWidget.setCurrentIndex(1)
@@ -1533,21 +1579,22 @@ class Ui_MainWindow(object):
         # plot data
         for item in self.get_all_selected():
             if isinstance(item,Data_1d):
-                ax2.errorbar(item.q,item.I,yerr=item.err,label=item.name.split("~")[1])
-                #plt.plot(item.q,item.I,label=item.name)
-                ax2.set_xscale('log')
-                ax2.set_yscale('log')
-                ax2.set_xlabel('q [Ang.^-1]')
-                ax2.set_ylabel('I(q) [arb. units]')
-                ax2.legend(fontsize=9)
+                self.plot_1D_1D_data(
+                    ax2, 
+                    item.q, 
+                    item.I, 
+                    item.err, 
+                    item.name.split("~")[1]
+                    )
+                
             elif isinstance(item, Data_1d_az):
-                ax2.plot(item.chi,item.I,label=item.name.split("~")[1])
-                ax2.set_xscale('linear')
-                ax2.set_yscale('linear')
-                ax2.set_xlabel('chi [deg.]')
-                ax2.set_ylabel('I(q) [arb. units]')
-                ax2.legend(fontsize=9)
-        #    
+                self.plot_1D_az(
+                    ax2, 
+                    item.chi, 
+                    item.I, 
+                    item.name.split("~")[1]
+                    )
+                
         #ax.errorbar(image,cmap="turbo",vmin=0,vmax=self.scale_max) #,norm="log",vmin=0,vmax=self.scale_max
         #ax.set_position([0.2, 0.2, 0.6, 0.6])
         # refresh canvas
@@ -1763,7 +1810,7 @@ class Ui_MainWindow(object):
 
         self.clear_lists()
 
-    def show_warning_messagebox(self,text):
+    def show_warning_messagebox(self,text, title = "Warning"):
         msg = QtWidgets.QMessageBox()
         msg.setIcon(QtWidgets.QMessageBox.Warning)
 
@@ -1771,7 +1818,7 @@ class Ui_MainWindow(object):
         msg.setText(text)
 
         # setting Message box window title
-        msg.setWindowTitle("Warning")
+        msg.setWindowTitle(title)
 
         # declaring buttons on Message Box
         msg.setStandardButtons(QtWidgets.QMessageBox.Ok)
@@ -1784,11 +1831,11 @@ class Ui_MainWindow(object):
         #try:
         
         if len(self.listWidget_smp.selectedIndexes()) < 1:
-            self.show_warning_messagebox("No sample selected.")
+            self.show_warning_messagebox("No sample selected.", title="Error")
             return
 
         if len(self.listWidget_bkg.selectedIndexes()) < 1:
-            self.show_warning_messagebox("No background selected.")
+            self.show_warning_messagebox("No background selected.", title="Error")
             return
 
         if len(self.listWidget_bkg.selectedIndexes()) > 1 and len(self.listWidget_bkg.selectedIndexes()) != len(self.listWidget_smp.selectedIndexes()):
