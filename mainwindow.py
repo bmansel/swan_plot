@@ -567,6 +567,7 @@ class Ui_MainWindow(object):
         self.monitor_002 = False
         self.mask = None
         self.bit_depth = None
+        self.ai = None
         #self.show_warning_messagebox("The Y direct beam input box is now set to be consistant with pyFAI not FIT2d. For the LFP image and FIT2d use 2352 - Y direct beam. The best option is to always use a .poni file.")
         
         dlg = QtWidgets.QMessageBox(MainWindow)
@@ -1074,20 +1075,24 @@ class Ui_MainWindow(object):
    
    
     def click_integrate_2D(self):
-        for item in self.get_all_selected():
-            if isinstance(item, Data_2d):
-                az_image = item.integrate_2D(self.ai,self.mask)
-                data = Data_2d_az(
-                    item.dir,
-                    item.ext,
-                    "2Daz~" + item.name.split("~")[1],
-                    az_image,
-                    {"type":item.info["type"],"dim": "2D"}
-                )
-                self.append_data(data, data.info["type"])
-                self.plot_2Daz(data.array, data.name)
-    
-        return data    
+        if self.ai is None:
+            self.show_warning_messagebox(
+                "Scattering geometry information is not found, input a .poni file or information from fit 2d")
+        else:
+            for item in self.get_all_selected():
+                if isinstance(item, Data_2d):
+                    az_image = item.integrate_2D(self.ai,self.mask)
+                    data = Data_2d_az(
+                        item.dir,
+                        item.ext,
+                        "2Daz~" + item.name.split("~")[1],
+                        az_image,
+                        {"type":item.info["type"],"dim": "2D"}
+                    )
+                    self.append_data(data, data.info["type"])
+                    self.plot_2Daz(data.array, data.name)
+        
+            return data    
     
     def click_1D_subtract(self):
         if len(self.listWidget_smp.selectedIndexes()) < 1:
