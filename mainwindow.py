@@ -227,6 +227,11 @@ class Ui_MainWindow(object):
         self.btn_average.setObjectName("btn_average")
         self.btn_average.setFont(font)
 
+        self.btn_subtract = QtWidgets.QPushButton(self.groupBox, clicked= lambda: self.click_subtract())
+        self.btn_subtract.setGeometry(QtCore.QRect(731, 190, 101, 25))
+        self.btn_subtract.setObjectName("btn_subtract")
+        self.btn_subtract.setFont(font)
+
         self.groupBox_5 = QtWidgets.QGroupBox(self.tab)
         self.groupBox_5.setGeometry(QtCore.QRect(739, 40, 181, 161))
         font = QtGui.QFont()
@@ -289,15 +294,15 @@ class Ui_MainWindow(object):
         font.setWeight(50)
         self.btn_remove_outliers.setFont(font)
         self.btn_remove_outliers.setObjectName("btn_remove_outliers")
-        self.btn_2d_subtract = QtWidgets.QPushButton(self.tab, clicked = lambda: self.subtract_2D())
-        self.btn_2d_subtract.setGeometry(QtCore.QRect(788, 454, 121, 41))
+        #self.btn_2d_subtract = QtWidgets.QPushButton(self.tab, clicked = lambda: self.subtract_2D())
+        #self.btn_2d_subtract.setGeometry(QtCore.QRect(788, 454, 121, 41))
         font = QtGui.QFont()
         font.setStyleName('Microsoft Sans Serif')
         font.setPointSize(12)
         font.setBold(True)
         font.setWeight(75)
-        self.btn_2d_subtract.setFont(font)
-        self.btn_2d_subtract.setObjectName("btn_2d_subtract")
+        # self.btn_2d_subtract.setFont(font)
+        # self.btn_2d_subtract.setObjectName("btn_2d_subtract")
         
 
         #####################################################################
@@ -325,9 +330,9 @@ class Ui_MainWindow(object):
         #self.Btn_show_1d = QtWidgets.QPushButton(self.tab_2, clicked = lambda: self.click_plot_1D())
         #self.Btn_show_1d.setGeometry(QtCore.QRect(798, 10, 111, 25))
         #self.Btn_show_1d.setObjectName("Btn_show_1d")
-        self.btn_1D_subtract = QtWidgets.QPushButton(self.tab_2, clicked = lambda: self.click_1D_subtract())
-        self.btn_1D_subtract.setGeometry(QtCore.QRect(798, 100, 111, 25))
-        self.btn_1D_subtract.setObjectName("btn_1D_subtract")
+        # self.btn_1D_subtract = QtWidgets.QPushButton(self.tab_2, clicked = lambda: self.click_1D_subtract())
+        # self.btn_1D_subtract.setGeometry(QtCore.QRect(798, 100, 111, 25))
+        # self.btn_1D_subtract.setObjectName("btn_1D_subtract")
         #self.btn_integrate = QtWidgets.QPushButton(self.tab_2, clicked = lambda: self.click_integrate())
         #self.btn_integrate.setGeometry(QtCore.QRect(798, 40, 111, 25))
         #self.btn_integrate.setObjectName("btn_integrate")
@@ -607,6 +612,7 @@ class Ui_MainWindow(object):
         self.btn_show.setText(_translate("MainWindow", "Show"))
         self.btn_sum.setText(_translate("MainWindow", "Sum"))
         self.btn_average.setText(_translate("MainWindow", "Average"))
+        self.btn_subtract.setText(_translate("MainWindow", "Subtract"))
         self.groupBox_5.setTitle(_translate("MainWindow", "Remove outliers:"))
         self.groupBox_rot_img.setTitle(_translate("MainWindow", "Rotate image:"))
         self.lbl_rot_ang.setText(_translate("MainWindow", "Angle:"))
@@ -617,14 +623,14 @@ class Ui_MainWindow(object):
         self.lineEdit_threshold.setText(_translate("MainWindow", "50"))
         self.label_2.setText(_translate("MainWindow", "Threshold:"))
         self.btn_remove_outliers.setText(_translate("MainWindow", "Apply to selected"))
-        self.btn_2d_subtract.setText(_translate("MainWindow", "2D subtraction"))
+        #self.btn_2d_subtract.setText(_translate("MainWindow", "2D subtraction"))
         self.btn_2d_integrate.setText(_translate("MainWindow", "2D integrate"))
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab), _translate("MainWindow", "2D Tools"))
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab_2), _translate("MainWindow", "1D Tools"))
-        self.btn_2d_subtract.setText(_translate("MainWindow", "2D subtract"))
+        #self.btn_2d_subtract.setText(_translate("MainWindow", "2D subtract"))
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab), _translate("MainWindow", "2D Tools"))
         #self.Btn_show_1d.setText(_translate("MainWindow", "Plot selected"))
-        self.btn_1D_subtract.setText(_translate("MainWindow", "1D Subtract"))
+        #self.btn_1D_subtract.setText(_translate("MainWindow", "1D Subtract"))
         #self.btn_integrate.setText(_translate("MainWindow", "Integrate"))
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab_2), _translate("MainWindow", "1D Tools"))
         self.groupBox_6.setTitle(_translate("MainWindow", "Integration (fit 2D format)  "))
@@ -665,6 +671,29 @@ class Ui_MainWindow(object):
     #     quitAct = contextMenu.addAction("Quit")
     #     action = contextMenu.exec_(self.mapToGlobal(event.pos()))
 
+    def click_subtract(self):
+        if self.listWidget_smp.currentRow() == -1:
+            print("No sample selected")
+            return
+        if self.listWidget_bkg.currentRow() == -1:
+            print("No background selected")
+            return
+        smp = self.sample_data[self.listWidget_smp.selectedIndexes()[0].data()]
+        bkg = self.background_data[self.listWidget_bkg.selectedIndexes()[0].data()]
+        if isinstance(smp, Data_2d) and isinstance(bkg, Data_2d):
+            try:
+                self.subtract_2D()
+            except:
+                self.show_warning_messagebox("Subtraction failed. Check that the data dimensions match.")
+        
+        elif isinstance(smp, Data_1d) and isinstance(bkg, Data_1d):
+            try:
+                self.subtract_1D()
+            except:
+                self.show_warning_messagebox("Subtraction failed. Check that the data dimensions match.")
+        else:
+            self.show_warning_messagebox("Not matching 1D or 2D data types which can be subtracted.")
+    
     def get_data_dict(self, data_type):
         if data_type == "smp":
             return self.sample_data
@@ -1016,49 +1045,6 @@ class Ui_MainWindow(object):
             self.monitor_002 = False
             #print(self.monitor_002)
 
-    # def click_rename(self):
-    #     all_data = self.get_all_selected()
-    #     if len(all_data) == 0:
-    #         self.show_warning_messagebox("No data selected, select data and try again.")
-    #         return
-        
-    #     for data in all_data:
-    #         old_name = data.name
-    #         new_name, ok = QInputDialog.getText(MainWindow, 'Rename Dialog', 'Change name from ' + old_name.split("~")[1] + ' to:')
-    #         if ok and new_name != "":
-    #             new_name = old_name.split("~")[0] + "~" + new_name
-    #             data.name = new_name
-    #             if data.info['type'] == "smp":
-    #                 if new_name in self.sample_data:
-    #                     self.show_warning_messagebox("Name already exists, try again.")
-    #                     return
-    #                 else:
-    #                     self.sample_data[new_name] = self.sample_data[old_name]
-    #                     del self.sample_data[old_name]
-                    
-    #             elif data.info['type'] == "bkg":
-    #                 if new_name in self.background_data:
-    #                     self.show_warning_messagebox("Name already exists, try again.")
-    #                     return
-    #                 else:
-    #                     self.background_data[new_name] = self.background_data[old_name]
-    #                     del self.background_data[old_name]
-                    
-    #             elif data.info['type'] == "sub":
-    #                 if new_name in self.processed_data:
-    #                     self.show_warning_messagebox("Name already exists, try again.")
-    #                     return
-    #                 else:
-    #                     self.processed_data[new_name] = self.processed_data[old_name]
-    #                     del self.processed_data[old_name]
-        
-    #         elif new_name == "":
-    #             self.show_warning_messagebox("No name entered, try again.")
-    #             return
-    #         else:
-    #             return
-
-
     def click_rename(self):
         if len(self.listWidget_smp.selectedIndexes()) != 0:
             for item in self.listWidget_smp.selectedItems():
@@ -1104,8 +1090,6 @@ class Ui_MainWindow(object):
                     self.processed_data[new_name] = self.processed_data[old_name]
                     del self.processed_data[old_name]
         self.clear_lists()  
-    
-    
     
     def click_integrate_radial(self):
         if self.ai is None:
@@ -1187,7 +1171,7 @@ class Ui_MainWindow(object):
         
             return data    
     
-    def click_1D_subtract(self):
+    def subtract_1D(self):
         if len(self.listWidget_smp.selectedIndexes()) < 1:
             self.show_warning_messagebox("No sample selected.")
             return
@@ -1266,6 +1250,7 @@ class Ui_MainWindow(object):
                 
                 self.processed_data[out.name] = out
                 self.listWidget_processed.addItem(out.name)
+        self.tabWidget.setCurrentWidget(self.tab_2)
         self.clear_lists()      
 
     def no_ai_found_error(self):
@@ -2019,7 +2004,7 @@ class Ui_MainWindow(object):
         #except:
         #    self.show_warning_messagebox("2d images not compatible.")
         #    return   
-
+        self.tabWidget.setCurrentWidget(self.tab_2)
         self.clear_lists()
             
 
