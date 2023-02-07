@@ -793,7 +793,9 @@ class Ui_MainWindow(object):
         '''
         
         if event.button == 3 and isinstance(self.get_plot_image_data(), Data_2d):
-            
+            if self.ai is None:
+                self.no_ai_found_error()
+                return
             self.ix, self.iy = event.xdata, event.ydata
             q = np.squeeze(self.ai.qFunction(self.iy, self.ix)) / 10
             chi = np.rad2deg(self.ai.chi(self.iy, self.ix))
@@ -843,12 +845,18 @@ class Ui_MainWindow(object):
                 self.canvas.draw()
             elif action == azi_integrate:
                 data = self.get_plot_image_data()
+                self.figure2.clear()
+                ax2 =  self.figure2.add_subplot(111)
                 if data.info["type"] == "smp":
                     normValue = float(self.lineEdit_smp_TM.text().strip())
                 elif data.info["type"] == "bkg":    
                     normValue = float(self.lineEdit_bkg_TM.text().strip())
                 else:
                     normValue = 1
+                
+                normValue /= self.dsb_scale_factor.value()
+                if self.monitor_002:
+                        normValue *= data.info["civi"]
                 
                 q, I, err = data.integrate_image(
                     self.ai,
@@ -860,6 +868,7 @@ class Ui_MainWindow(object):
                 )
                     
                 
+
                 new_data = Data_1d(
                     data.dir,
                     "dat",
@@ -870,9 +879,19 @@ class Ui_MainWindow(object):
                     {"type": data.info["type"]}
                 )
                 self.append_data(new_data, new_data.info['type'])
+                self.plot_1D_1D_data( 
+                        ax2, 
+                        new_data.q, 
+                        new_data.I, new_data.err, 
+                        new_data.name.split("~")[1]
+                        )
+                self.canvas2.draw()
+                self.tabWidget.setCurrentWidget(self.tab_2)
 
             elif action == rad_integrate:
                 item = self.get_plot_image_data()
+                self.figure2.clear()
+                ax2 =  self.figure2.add_subplot(111)
                 chi, I = self.integrate_radial(item)
                 if len(I) < 2:
                     self.show_warning_messagebox("Warning, length of data is less than 2!!")
@@ -886,7 +905,13 @@ class Ui_MainWindow(object):
                 {"type":item.info["type"]}
                 )
                 self.append_data(data, data.info["type"])
-                self.clear_lists()
+                self.plot_1D_az(
+                    ax2, 
+                    data.chi, 
+                    data.I, 
+                    data.name.split("~")[1]
+                    )
+                self.tabWidget.setCurrentWidget(self.tab_2)
 
             #print(p3, " this is p3" )
             #print(p2, " this is p2" )
@@ -917,29 +942,30 @@ class Ui_MainWindow(object):
     def click_load_reject(self):
         fname, _ = QtWidgets.QFileDialog.getOpenFileName(MainWindow, 
         "Select reject file", "", " REJECT (REJECT.dat);;All Files (*)")
-        mask_data = np.loadtxt(fname, usecols=(0, 1),comments='#')
-        #print(self.listWidget_smp.count())
-        if self.listWidget_smp.count() < 1:
-            self.show_warning_messagebox("No data loaded, load a sample image file first.")
-            return
-        for index in range(self.listWidget_smp.count()):
-            item = self.listWidget_smp.item(index).text()
-            data = self.sample_data[item]
-            if isinstance(data,Data_2d):
-                if self.mask is None:
-                    self.mask = make_reject_mask(np.zeros(np.shape(data.array)), mask_data)
-                    return
-                else:
-                    self.mask = combine_masks(make_reject_mask(np.zeros(np.shape(data.array)), mask_data), self.mask)
-                    return    
-        self.show_warning_messagebox("No image files loaded. Load an image file and try again.")
+        if fname and fname != "":
+            mask_data = np.loadtxt(fname, usecols=(0, 1),comments='#')
+            #print(self.listWidget_smp.count())
+            if self.listWidget_smp.count() < 1:
+                self.show_warning_messagebox("No data loaded, load a sample image file first.")
+                return
+            for index in range(self.listWidget_smp.count()):
+                item = self.listWidget_smp.item(index).text()
+                data = self.sample_data[item]
+                if isinstance(data,Data_2d):
+                    if self.mask is None:
+                        self.mask = make_reject_mask(np.zeros(np.shape(data.array)), mask_data)
+                        return
+                    else:
+                        self.mask = combine_masks(make_reject_mask(np.zeros(np.shape(data.array)), mask_data), self.mask)
+                        return    
+            self.show_warning_messagebox("No image files loaded. Load an image file and try again.")
         
         
     def click_load_mask(self):
         fname, _ = QtWidgets.QFileDialog.getOpenFileName(MainWindow, 
         "Select a mask file", "", " tif Image (*.tif);;edf Image (*.edf);;All Files (*)")
-        
-        self.mask = fabio.open(fname).data
+        if fname and fname != "":
+            self.mask = fabio.open(fname).data
 
     def mask_pix_zero(self,image):
         inv_mask = np.abs(1-self.mask)
@@ -990,38 +1016,92 @@ class Ui_MainWindow(object):
             self.monitor_002 = False
             #print(self.monitor_002)
 
+    # def click_rename(self):
+    #     all_data = self.get_all_selected()
+    #     if len(all_data) == 0:
+    #         self.show_warning_messagebox("No data selected, select data and try again.")
+    #         return
+        
+    #     for data in all_data:
+    #         old_name = data.name
+    #         new_name, ok = QInputDialog.getText(MainWindow, 'Rename Dialog', 'Change name from ' + old_name.split("~")[1] + ' to:')
+    #         if ok and new_name != "":
+    #             new_name = old_name.split("~")[0] + "~" + new_name
+    #             data.name = new_name
+    #             if data.info['type'] == "smp":
+    #                 if new_name in self.sample_data:
+    #                     self.show_warning_messagebox("Name already exists, try again.")
+    #                     return
+    #                 else:
+    #                     self.sample_data[new_name] = self.sample_data[old_name]
+    #                     del self.sample_data[old_name]
+                    
+    #             elif data.info['type'] == "bkg":
+    #                 if new_name in self.background_data:
+    #                     self.show_warning_messagebox("Name already exists, try again.")
+    #                     return
+    #                 else:
+    #                     self.background_data[new_name] = self.background_data[old_name]
+    #                     del self.background_data[old_name]
+                    
+    #             elif data.info['type'] == "sub":
+    #                 if new_name in self.processed_data:
+    #                     self.show_warning_messagebox("Name already exists, try again.")
+    #                     return
+    #                 else:
+    #                     self.processed_data[new_name] = self.processed_data[old_name]
+    #                     del self.processed_data[old_name]
+        
+    #         elif new_name == "":
+    #             self.show_warning_messagebox("No name entered, try again.")
+    #             return
+    #         else:
+    #             return
+
+
     def click_rename(self):
         if len(self.listWidget_smp.selectedIndexes()) != 0:
             for item in self.listWidget_smp.selectedItems():
                 old_name = item.text()
                 new_name, ok = QInputDialog.getText(MainWindow, 'Rename Dialog', 'Change name from ' + old_name.split("~")[1] + ' to:')
-                if ok:
+                if ok and new_name != "":
+                    if (old_name.split('~')[0] + '~' + new_name) in self.sample_data:
+                        self.show_warning_messagebox("Name already exists, try again.")
+                        return
                     new_name = old_name.split("~")[0] + "~" + new_name
                     item.setText(new_name)
                     self.sample_data[old_name].name = new_name
                     self.sample_data[new_name] = self.sample_data[old_name]
                     del self.sample_data[old_name]
+                elif new_name == "":
+                    self.show_warning_messagebox("Name cannot be empty.")
         
         if len(self.listWidget_bkg.selectedIndexes()) != 0:
-            for item in self.listWidget_bkg.selectedIndexes():
+            for item in self.listWidget_bkg.selectedItems():
                 old_name = item.text()
                 new_name, ok = QInputDialog.getText(MainWindow, 'Rename Dialog', 'Change name from ' + old_name.split("~")[1] + ' to:')
-                if ok:
+                if ok and new_name != "":
+                    if (old_name.split('~')[0] + '~' + new_name) in self.background_data:
+                        self.show_warning_messagebox("Name already exists, try again.")
+                        return
                     new_name = old_name.split("~")[0] + "~" + new_name
                     item.setText(new_name)
                     self.background_data[old_name].name = new_name
                     self.background_data[new_name] = self.background_data[old_name]
                     del self.background_data[old_name]
         
-        if len(self.listWidget_bkg.selectedIndexes()) != 0:        
-            for item in self.listWidget_bkg.selectedIndexes():
+        if len(self.listWidget_processed.selectedIndexes()) != 0:        
+            for item in self.listWidget_processed.selectedItems():
                 old_name = item.text()
                 new_name, ok = QInputDialog.getText(MainWindow, 'Rename Dialog', 'Change name from ' + old_name.split("~")[1] + ' to:')
-                if ok:
+                if ok and new_name != "":
+                    if (old_name.split('~')[0] + '~' + new_name) in self.processed_data:
+                        self.show_warning_messagebox("Name already exists, try again.")
+                        return
                     new_name = old_name.split("~")[0] + "~" + new_name
                     item.setText(new_name)
                     self.processed_data[old_name].name = new_name
-                    self.processed_data[new_name] = self.background_data[old_name]
+                    self.processed_data[new_name] = self.processed_data[old_name]
                     del self.processed_data[old_name]
         self.clear_lists()  
     
@@ -1198,7 +1278,7 @@ class Ui_MainWindow(object):
             self.figure2.clear()
             ax2 =  self.figure2.add_subplot(111)
             for data in self.get_all_selected():
-                if isinstance(data,Data_2d) and self.ai:
+                if isinstance(data,Data_2d):
                     
                     if data.info["type"] == "smp":
                         normValue = float(self.lineEdit_smp_TM.text().strip())
@@ -1236,7 +1316,8 @@ class Ui_MainWindow(object):
                     self.plot_1D_1D_data( 
                         ax2, 
                         new_data.q, 
-                        new_data.I, new_data.err, 
+                        new_data.I, 
+                        new_data.err, 
                         new_data.name.split("~")[1]
                         )
 
@@ -1266,33 +1347,37 @@ class Ui_MainWindow(object):
         
         plankC = float(4.135667696e-15)
         speedLightC = float(299_792_458)
-
-        Fit2dDic = {}
-        Fit2dDic["pixelX"] = float(self.lineEdit_X.text().strip())
-        Fit2dDic["pixelY"] = float(self.lineEdit_X.text().strip())
-        Fit2dDic["directDist"] = float(self.lineEdit_SD.text().strip())
-        Fit2dDic["energy"] = plankC * speedLightC / 1000 / float(self.lineEdit_wavelength.text().strip()) / 10_000_000_000
-        Fit2dDic["centerX"] = float(self.lineEdit_X_dir.text().strip())
-        Fit2dDic["centerY"] = float(self.lineEdit_Y_dir.text().strip())
-        Fit2dDic["tiltPlanRotation"] = float(self.lineEdit_rotAngTiltPlane.text().strip())
-        Fit2dDic["tilt"] = float(self.lineEdit_angDetTilt.text().strip())
         
-        self.ai = azimuthalIntegrator.AzimuthalIntegrator(wavelength=float(self.lineEdit_wavelength.text().strip()) / 10_000_000_000)
-        
-        self.ai.setFit2D(
-        Fit2dDic["directDist"],
-        Fit2dDic["centerX"],
-        Fit2dDic["centerY"],    # 2352 - 
-        Fit2dDic["tilt"],
-        Fit2dDic["tiltPlanRotation"],
-        Fit2dDic["pixelX"],
-        Fit2dDic["pixelY"]
-        )
+        try:
+            
+            Fit2dDic = {}
+            Fit2dDic["pixelX"] = float(self.lineEdit_X.text().strip())
+            Fit2dDic["pixelY"] = float(self.lineEdit_X.text().strip())
+            Fit2dDic["directDist"] = float(self.lineEdit_SD.text().strip())
+            Fit2dDic["energy"] = plankC * speedLightC / 1000 / float(self.lineEdit_wavelength.text().strip()) / 10_000_000_000
+            Fit2dDic["centerX"] = float(self.lineEdit_X_dir.text().strip())
+            Fit2dDic["centerY"] = float(self.lineEdit_Y_dir.text().strip())
+            Fit2dDic["tiltPlanRotation"] = float(self.lineEdit_rotAngTiltPlane.text().strip())
+            Fit2dDic["tilt"] = float(self.lineEdit_angDetTilt.text().strip())
+            
+            self.ai = azimuthalIntegrator.AzimuthalIntegrator(wavelength=float(self.lineEdit_wavelength.text().strip()) / 10_000_000_000)
+            
+            self.ai.setFit2D(
+            Fit2dDic["directDist"],
+            Fit2dDic["centerX"],
+            Fit2dDic["centerY"],    # 2352 - 
+            Fit2dDic["tilt"],
+            Fit2dDic["tiltPlanRotation"],
+            Fit2dDic["pixelX"],
+            Fit2dDic["pixelY"]
+            )
 
-        fname, _ = QtWidgets.QFileDialog.getSaveFileName(MainWindow, "Poni file save name", "", "PONI (*.poni);;All Files (*)")
+            fname, _ = QtWidgets.QFileDialog.getSaveFileName(MainWindow, "Poni file save name", "", "PONI (*.poni);;All Files (*)")
 
-        self.ai.write(fname)
-
+            self.ai.write(fname)
+        except:
+            self.show_warning_messagebox("Please check your input values!")
+            return
         #print(self.ai)
         #print(self.ai.getFit2D())
   
@@ -1457,7 +1542,7 @@ class Ui_MainWindow(object):
             old_path = path
             path = self.append_file(path)
             self.show_warning_messagebox('File ' + old_path + ' found, saving to ' + path)
-        tifffile.imwrite(path, data.array, data.array.dtype)
+        tifffile.imwrite(path, data.array, dtype=data.array.dtype)
         self.clear_lists()
 
     def export_single_dat(self, data):
@@ -1548,7 +1633,7 @@ class Ui_MainWindow(object):
                 ),
                 data_2d.info["type"]
             )
-            
+            print("line 1627 data_2d.info[type] is", data_2d.info["type"])
         self.clear_lists()
 
     def plot_1D_1D_data(self, axis, q, I, err, label):

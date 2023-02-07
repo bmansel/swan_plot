@@ -553,7 +553,8 @@ class Data_2d:
             polarization_factor=None, 
             dark=None, 
             flat=None, 
-            method=("bbox", "csr", "cython"), #'cython'
+            #method=("no", "csr", "cython"), #'cython'
+            method=("no", "histogram", "cython"),
             unit='q_A^-1', 
             safe=False, 
             normalization_factor=normValue, 
