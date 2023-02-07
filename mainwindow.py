@@ -672,11 +672,11 @@ class Ui_MainWindow(object):
     #     action = contextMenu.exec_(self.mapToGlobal(event.pos()))
 
     def click_subtract(self):
-        if self.listWidget_smp.currentRow() == -1:
-            print("No sample selected")
+        if len(self.listWidget_smp.selectedIndexes()) == 0:
+            self.show_warning_messagebox("No sample selected")
             return
-        if self.listWidget_bkg.currentRow() == -1:
-            print("No background selected")
+        if len(self.listWidget_bkg.selectedIndexes()) == 0:
+            self.show_warning_messagebox("No background selected")
             return
         smp = self.sample_data[self.listWidget_smp.selectedIndexes()[0].data()]
         bkg = self.background_data[self.listWidget_bkg.selectedIndexes()[0].data()]
@@ -1167,6 +1167,7 @@ class Ui_MainWindow(object):
                         {"type":item.info["type"],"dim": "2D"}
                     )
                     self.append_data(data, data.info["type"])
+                    self.set_plot_image_name(data.name,data.info["type"])
                     self.plot_2Daz(data.array, data.name)
         
             return data    
@@ -1457,15 +1458,18 @@ class Ui_MainWindow(object):
                 if self.mask is not None:
                     image = self.mask_pix_zero(image)
                 self.plot_2D(image,data_2d.name)
+                self.set_plot_image_name(data_2d.name, data_2d.info['type'])
                 self.clear_lists()
             #except:
             #    self.show_warning_messagebox("Image did not pass.")
         elif isinstance(data_2d, Data_2d_az):
             self.plot_2Daz(data_2d.array,data_2d.name)
+            self.set_plot_image_name(data_2d.name, data_2d.info['type'])
             self.clear_lists()
 
         elif isinstance(data_2d,Data_2d_rot):
             self.plot_2D(data_2d.array,data_2d.name)
+            self.set_plot_image_name(data_2d.name, data_2d.info['type'])
             self.clear_lists()
         
         elif isinstance(data_2d, Data_1d):
@@ -1700,6 +1704,7 @@ class Ui_MainWindow(object):
         #self.figure.tight_layout()
         #self.figure.
         self.canvas.draw()
+        
     '''
     def bin_ndarray(self,ndarray, new_shape, operation='mean'):
     
@@ -2004,7 +2009,7 @@ class Ui_MainWindow(object):
         #except:
         #    self.show_warning_messagebox("2d images not compatible.")
         #    return   
-        self.tabWidget.setCurrentWidget(self.tab_2)
+        self.tabWidget.setCurrentWidget(self.tab)
         self.clear_lists()
             
 
