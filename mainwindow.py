@@ -1265,7 +1265,6 @@ class Ui_MainWindow(object):
             ax2 =  self.figure2.add_subplot(111)
             for data in self.get_all_selected():
                 if isinstance(data,Data_2d):
-                    
                     if data.info["type"] == "smp":
                         normValue = float(self.lineEdit_smp_TM.text().strip())
                     elif data.info["type"] == "bkg":    
@@ -1608,21 +1607,18 @@ class Ui_MainWindow(object):
                 float(self.lineEdit_threshold.text())
             )
             
-            self.plot_2D(im_corr,"2D~" + "OLrm_" + data_2d.name.split("~")[1])
-
             corr_data = {'dir':data_2d.dir,'ext':data_2d.ext ,'name': "2D~" + "OLrm_" + data_2d.name.split("~")[1],'array': im_corr}
-
             self.append_data(
                 Data_2d(
                     corr_data['dir'],
                     corr_data['ext'],
                     corr_data['name'],
                     corr_data['array'],
-                    data_2d.info["type"]
+                    data_2d.info
                 ),
                 data_2d.info["type"]
             )
-            print("line 1627 data_2d.info[type] is", data_2d.info["type"])
+        self.plot_2D(im_corr,"2D~" + "OLrm_" + data_2d.name.split("~")[1])
         self.clear_lists()
 
     def plot_1D_1D_data(self, axis, q, I, err, label):
@@ -1801,87 +1797,88 @@ class Ui_MainWindow(object):
     def import_data(self,data_type):
         #open file dialog returns a tuple
         fnames, _ = QtWidgets.QFileDialog.getOpenFileNames(MainWindow, "Select multiple files", "", " tif Image (*.tif);;h5 Image (*master.h5);;1D data (*.dat);;All Files (*)")
+        plot_2D_flag = False
+        if not fnames or fnames == "":
+            return
         
-        if fnames and fnames != "":
-            for item in fnames:
-                if item.split('.')[-1] == "tif":
-                    data = Data_2d(
-                        os.path.dirname(item),
-                        os.path.basename(item).split('.')[-1],
-                        "2D~" + Path(item).stem,
-                        tifffile.imread(item),
-                        {"type": data_type}
-                    ) 
+        for item in fnames:
+            if item.split('.')[-1] == "tif":
+                plot_2D_flag = True
+                data = Data_2d(
+                    os.path.dirname(item),
+                    os.path.basename(item).split('.')[-1],
+                    "2D~" + Path(item).stem,
+                    tifffile.imread(item),
+                    {"type": data_type}
+                ) 
 
+                if self.fit2d_mode:
+                    data.array = np.flipud(data.array)
+                
+                self.init_image_import(data.array.copy())
+                self.append_data(data, data_type)
+
+            if item.split('.')[-1] == "h5":
+                plot_2D_flag = True
+                if self.monitor_002:
+                        civi, rigi, expTime = self.readHeaderFile(os.path.dirname(item),Path(item).stem[0:3])
+                
+                imgData = fabio.open(item)
+                for num in range(imgData.nframes):
+                    dict = {
+                        'dir' : os.path.dirname(item),
+                        'ext' : os.path.basename(item).split('.')[-1],
+                        'name' : '2D~' + Path(item).stem + '_' + str(num),
+                        'info' : {"type": data_type}
+                    }
+                    if imgData.nframes > 1:
+                        dict['data'] = imgData.getframe(num).data
+                        
+                    else:
+                        dict['data'] = imgData.data
+                    if self.monitor_002:
+                        dict['info']['civi'] = civi[num]
+                        dict['info']['rigi'] = rigi[num]
+                        dict['info']['expTime'] = expTime[num]
+
+                    data = Data_2d(
+                        dict['dir'],
+                        dict['ext'],
+                        dict['name'],
+                        dict['data'],
+                        dict['info']
+                    )
                     if self.fit2d_mode:
                         data.array = np.flipud(data.array)
-                    
-                    self.plot_2D(data.array,data.name)
-                    self.init_image_import(data.array.copy())
+                    self.append_data(data,data_type)
+                    self.init_image_import(dict['data'].copy())
+                    # if self.bit_depth is None:
+                    #     self.set_bit_depth(data.array)
 
-                    self.set_plot_image_name(data.name,data.info['type'])
-                    self.append_data(data, data_type)
+                    # if self.saturated_pix_mask is False:
+                    #     self.mask = make_saturated_mask(dict['data'].copy())
+                    #     self.show_warning_messagebox("Saturated pixels with value 2^32-1 are masked.")
+                    #     self.saturated_pix_mask = True
 
-                if item.split('.')[-1] == "h5":
-                    if self.monitor_002:
-                            civi, rigi, expTime = self.readHeaderFile(os.path.dirname(item),Path(item).stem[0:3])
-                    
-                    imgData = fabio.open(item)
-                    for num in range(imgData.nframes):
-                        dict = {
-                            'dir' : os.path.dirname(item),
-                            'ext' : os.path.basename(item).split('.')[-1],
-                            'name' : '2D~' + Path(item).stem + '_' + str(num),
-                            'info' : {"type": data_type}
-                        }
-                        if imgData.nframes > 1:
-                            dict['data'] = imgData.getframe(num).data
-                            
-                        else:
-                            dict['data'] = imgData.data
-                        if self.monitor_002:
-                            dict['info']['civi'] = civi[num]
-                            dict['info']['rigi'] = rigi[num]
-                            dict['info']['expTime'] = expTime[num]
-
-                        data = Data_2d(
-                            dict['dir'],
-                            dict['ext'],
-                            dict['name'],
-                            dict['data'],
-                            dict['info']
-                        )
-                        if self.fit2d_mode:
-                            data.array = np.flipud(data.array)
-                        self.append_data(data,data_type)
-                        self.init_image_import(dict['data'].copy())
-                        # if self.bit_depth is None:
-                        #     self.set_bit_depth(data.array)
-
-                        # if self.saturated_pix_mask is False:
-                        #     self.mask = make_saturated_mask(dict['data'].copy())
-                        #     self.show_warning_messagebox("Saturated pixels with value 2^32-1 are masked.")
-                        #     self.saturated_pix_mask = True
-                    self.plot_2D(data.array,data.name)
-                    self.set_plot_image_name(data.name,data.info['type'])
-                    
-
-                elif item.split('.')[-1] == "dat":
-                    try:
-                        raw_data = np.loadtxt(item, usecols=(0,1,2))
-                        #print(raw_data[:,1])
-                        data = Data_1d(
-                            os.path.dirname(item),
-                            os.path.basename(item).split('.')[-1],
-                            "1D~" + Path(item).stem,
-                            raw_data[:,0],
-                            raw_data[:,1],
-                            {"type": data_type},
-                            err = raw_data[:,2]
-                                                )
-                        self.append_data(data,data_type)
-                    except:
-                        self.show_warning_messagebox("There is likely an issue with the header.")
+            elif item.split('.')[-1] == "dat":
+                try:
+                    raw_data = np.loadtxt(item, usecols=(0,1,2))
+                    #print(raw_data[:,1])
+                    data = Data_1d(
+                        os.path.dirname(item),
+                        os.path.basename(item).split('.')[-1],
+                        "1D~" + Path(item).stem,
+                        raw_data[:,0],
+                        raw_data[:,1],
+                        {"type": data_type},
+                        err = raw_data[:,2]
+                                            )
+                    self.append_data(data,data_type)
+                except:
+                    self.show_warning_messagebox("There is likely an issue with the header.")
+        if plot_2D_flag:
+            self.plot_2D(data.array,data.name)
+            self.set_plot_image_name(data.name,data.info['type'])
 
         self.clear_lists()
 
