@@ -125,13 +125,19 @@ class Ui_MainWindow(object):
         font.setWeight(75)
         self.groupBox_2.setFont(font)
         self.groupBox_2.setObjectName("groupBox_2")
+        # smaller vertical layout widget
         self.verticalLayoutWidget = QtWidgets.QWidget(self.groupBox_2)
         self.verticalLayoutWidget.setGeometry(QtCore.QRect(-1, 19, 311, 141))
         self.verticalLayoutWidget.setObjectName("verticalLayoutWidget")
         self.verticalLayout = QtWidgets.QVBoxLayout(self.verticalLayoutWidget)
         self.verticalLayout.setContentsMargins(6, 6, 6, 6)
         self.verticalLayout.setObjectName("verticalLayout")
-        self.btn_import_smp = QtWidgets.QPushButton(self.verticalLayoutWidget, clicked = lambda: self.import_data("smp"))
+        # horizontal layout for buttons
+        self.horizontal_btn_Layout = QtWidgets.QHBoxLayout()
+        self.horizontal_btn_Layout.setObjectName("horizontal_btn_Layout")
+        # import button
+        self.btn_import_smp = QtWidgets.QPushButton(
+            self.verticalLayoutWidget, clicked=lambda: self.import_data("smp"))
         font = QtGui.QFont()
         font.setStyleName('Microsoft Sans Serif')
         font.setPointSize(11)
@@ -139,10 +145,31 @@ class Ui_MainWindow(object):
         font.setWeight(50)
         self.btn_import_smp.setFont(font)
         self.btn_import_smp.setObjectName("btn_import_smp")
-        self.verticalLayout.addWidget(self.btn_import_smp)
+        # select all /clear all button
+        self.btn_sel_clr_smp = QtWidgets.QPushButton(
+            self.verticalLayoutWidget, clicked=lambda: self.select_deselect_all("sample"))
+        font = QtGui.QFont()
+        font.setStyleName('Microsoft Sans Serif')
+        font.setPointSize(11)
+        font.setBold(False)
+        font.setWeight(50)
+        self.btn_sel_clr_smp.setFont(font)
+        self.btn_sel_clr_smp.setObjectName("btn_sel_clr__smp")
+        # line edit for sample filter
+        self.lineEdit_smp_filter = QtWidgets.QLineEdit(self.verticalLayoutWidget)
+        self.lineEdit_smp_filter.setEnabled(True)
+        self.lineEdit_smp_filter.setObjectName("lineEdit")
+        # add buttons and lineEdit to horizontal layout
+        self.horizontal_btn_Layout.addWidget(self.btn_import_smp)
+        self.horizontal_btn_Layout.addWidget(self.btn_sel_clr_smp)
+        self.horizontal_btn_Layout.addWidget(self.lineEdit_smp_filter)
+        # list widget
         self.listWidget_smp = QtWidgets.QListWidget(self.verticalLayoutWidget)
         self.listWidget_smp.setSelectionMode(QtWidgets.QAbstractItemView.MultiSelection)
         self.listWidget_smp.setObjectName("listWidget_smp")
+        self.listWidget_smp.installEventFilter(MainWindow)
+        # add horizontal layout to vertical layout
+        self.verticalLayout.addLayout(self.horizontal_btn_Layout)
         self.verticalLayout.addWidget(self.listWidget_smp)
         self.horizontalLayout.addWidget(self.groupBox_2)
         self.groupBox_3 = QtWidgets.QGroupBox(self.horizontalLayoutWidget)
@@ -532,7 +559,6 @@ class Ui_MainWindow(object):
         self.layout.addWidget(self.canvas)
         #self.canvas.setParent(self.tab)
         self.cid = self.canvas.mpl_connect('button_press_event', self.onclick)
-        #self.tab.installEventFilter(self)
         #self.toolbar.setOrientation(QtCore.Qt.Vertical)
         
         ################################################
@@ -568,7 +594,6 @@ class Ui_MainWindow(object):
         self.statusbar.setObjectName("statusbar")
         MainWindow.setStatusBar(self.statusbar)
         
-
         self.monitor_002 = False
         self.mask = None
         self.bit_depth = None
@@ -605,6 +630,7 @@ class Ui_MainWindow(object):
         self.groupBox.setTitle(_translate("MainWindow", "WAXS"))
         self.groupBox_2.setTitle(_translate("MainWindow", "Sample"))
         self.btn_import_smp.setText(_translate("MainWindow", "Import"))
+        self.btn_sel_clr_smp.setText(_translate("MainWindow", "select all"))
         self.groupBox_3.setTitle(_translate("MainWindow", "Background"))
         self.btn_import_bkg.setText(_translate("MainWindow", "Import"))
         self.groupBox_4.setTitle(_translate("MainWindow", "Subtracted"))
@@ -670,7 +696,59 @@ class Ui_MainWindow(object):
     #     openAct = contextMenu.addAction("Open")
     #     quitAct = contextMenu.addAction("Quit")
     #     action = contextMenu.exec_(self.mapToGlobal(event.pos()))
+    def eventFilter(self, source, event):
+        if (event.type() == QtCore.QEvent.ContextMenu and
+                source is self.listWidget_smp):
+            print(source)
+            print(event)
+            menu = QMenu()
+            menu.addAction("Select all", self.select_all("sample"))
+            menu.addAction("Deselect all", self.deselect_all("sample"))
+            menu.exec_(event.globalPos())
+            return True
+        return super().eventFilter(source, event)
 
+    # def clear_type(self, data_type: str):
+    #     if isinstance(Data_2d,data_type)
+        
+
+    def select_deselect_all(self, name):
+        if name == "sample":
+            if self.btn_sel_clr_smp.text() == "select all":
+                self.select_all("sample")
+            else:
+                self.deselect_all("sample")
+        elif name == "background":
+            if self.btn_sel_clr_bkg.text() == "select all":
+                self.select_all("background")
+            else:
+                self.deselect_all("background")
+        elif name == "subtract":
+            if self.btn_sel_clr_sub.text() == "select all":
+                self.select_all("subtract")
+            else:
+                self.deselect_all("subtract")
+
+    def deselect_all(self, name):
+        if name == "sample":
+            self.listWidget_smp.clearSelection()
+            self.btn_sel_clr_smp.setText("select all")
+        elif name == "background":
+            self.listWidget_bkg.clearSelection()
+        elif name == "subtract":
+            self.listWidget_sub.clearSelection()
+
+    
+    def select_all(self, name):
+        if name == "sample":
+            self.listWidget_smp.selectAll()
+            self.btn_sel_clr_smp.setText("clear selection")
+        elif name == "background":
+            self.listWidget_bkg.selectAll()
+        elif name == "subtract":
+            self.listWidget_sub.selectAll()
+
+            
     def click_subtract(self):
         if len(self.listWidget_smp.selectedIndexes()) == 0:
             self.show_warning_messagebox("No sample selected")
@@ -1489,7 +1567,7 @@ class Ui_MainWindow(object):
         if num_high_pix > 0 and self.bit_depth < 32:
             dlg = QtWidgets.QMessageBox(MainWindow)
             dlg.setWindowTitle("Pixel(s) overflowing, convert to higher bit depth")
-            dlg.setText(str(num_high_pix) + " saturated pixels in image " + name + ", select yes to set image type to " + str(2*self.bit_depth) +" bit or no to set satureated values to " + str(2**self.bit_depth - 1))
+            dlg.setText(str(num_high_pix) + " saturated pixels in image " + name + ". \n Select \"YES\" to set image type to " + str(2*self.bit_depth) +" bit. \n Select \"NO\" to keep 16 bit images and set satureated values to " + str(2**self.bit_depth - 1))
             dlg.setStandardButtons(QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No)
             dlg.setIcon(QtWidgets.QMessageBox.Question)
             button = dlg.exec()
