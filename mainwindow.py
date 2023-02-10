@@ -225,8 +225,6 @@ class Ui_MainWindow(object):
         # list widget
         self.listWidget_bkg = QtWidgets.QListWidget(
             self.verticalLayoutWidget_2)
-        #self.listWidget_bkg.setSelectionBehavior(
-        #    QtWidgets.QAbstractItemView.SelectItems) # should this be multi selection?
         self.listWidget_bkg.setObjectName("listWidget_bkg")
         self.listWidget_bkg.setSelectionMode(
             QtWidgets.QAbstractItemView.MultiSelection)
@@ -242,6 +240,7 @@ class Ui_MainWindow(object):
         font.setWeight(75)
         self.groupBox_4.setFont(font)
         self.groupBox_4.setObjectName("groupBox_4")
+        # smaller vertical layout widget
         self.verticalLayoutWidget_3 = QtWidgets.QWidget(self.groupBox_4)
         self.verticalLayoutWidget_3.setGeometry(QtCore.QRect(0, 20, 311, 141))
         self.verticalLayoutWidget_3.setObjectName("verticalLayoutWidget_3")
@@ -249,6 +248,10 @@ class Ui_MainWindow(object):
             self.verticalLayoutWidget_3)
         self.verticalLayout_3.setContentsMargins(6, 6, 6, 6)
         self.verticalLayout_3.setObjectName("verticalLayout_3")
+        # horizonal layout for buttons
+        self.horizontal_btn_Layout_3 = QtWidgets.QHBoxLayout()
+        self.horizontal_btn_Layout.setObjectName("horizontal_btn_Layout_3")
+        # import button
         self.btn_import_subd = QtWidgets.QPushButton(
             self.verticalLayoutWidget_3, clicked=lambda: self.import_data("sub"))
         font = QtGui.QFont()
@@ -258,13 +261,29 @@ class Ui_MainWindow(object):
         font.setWeight(50)
         self.btn_import_subd.setFont(font)
         self.btn_import_subd.setObjectName("btn_import_subd")
-        self.verticalLayout_3.addWidget(self.btn_import_subd)
-        self.listWidget_processed = QtWidgets.QListWidget(
+        # select all /clear all button
+        self.btn_sel_clr_sub = QtWidgets.QPushButton(
+            self.verticalLayoutWidget_3, clicked=lambda: self.click_select_deselect_all("subtract"))
+        self.btn_sel_clr_sub.setFont(font)
+        self.btn_sel_clr_sub.setObjectName("btn_sel_clr_sub")
+        # line edit for subtracted filter
+        self.lineEdit_sub_filter = QtWidgets.QLineEdit(
             self.verticalLayoutWidget_3)
-        self.listWidget_processed.setObjectName("listWidget_processed")
-        self.listWidget_processed.setSelectionMode(
+        self.lineEdit_sub_filter.setEnabled(True)
+        self.lineEdit_sub_filter.setObjectName("lineEdit_sub_filter")
+        # add buttons and lineEdit to horizontal layout
+        self.horizontal_btn_Layout_3.addWidget(self.btn_import_subd)
+        self.horizontal_btn_Layout_3.addWidget(self.btn_sel_clr_sub)
+        self.horizontal_btn_Layout_3.addWidget(self.lineEdit_sub_filter)
+        # list widget
+        self.listWidget_sub = QtWidgets.QListWidget(
+            self.verticalLayoutWidget_3)
+        self.listWidget_sub.setObjectName("listWidget_sub")
+        self.listWidget_sub.setSelectionMode(
             QtWidgets.QAbstractItemView.MultiSelection)
-        self.verticalLayout_3.addWidget(self.listWidget_processed)
+        # add horizontal layout to vertical layout
+        self.verticalLayout_3.addLayout(self.horizontal_btn_Layout_3)
+        self.verticalLayout_3.addWidget(self.listWidget_sub)
         self.horizontalLayout.addWidget(self.groupBox_4)
         self.tabWidget = QtWidgets.QTabWidget(self.groupBox)
         self.tabWidget.setGeometry(QtCore.QRect(10, 230, 931, 531))
@@ -676,6 +695,7 @@ class Ui_MainWindow(object):
         self.btn_import_smp.setText(_translate("MainWindow", "Import"))
         self.btn_sel_clr_smp.setText(_translate("MainWindow", "Select all"))
         self.btn_sel_clr_bkg.setText(_translate("MainWindow", "Select all"))
+        self.btn_sel_clr_sub.setText(_translate("MainWindow", "Select all"))
         self.groupBox_3.setTitle(_translate("MainWindow", "Background"))
         self.btn_import_bkg.setText(_translate("MainWindow", "Import"))
         self.groupBox_4.setTitle(_translate("MainWindow", "Subtracted"))
@@ -785,7 +805,7 @@ class Ui_MainWindow(object):
                 items = [self.listWidget_sub.item(
                     x) for x in range(self.listWidget_sub.count())]
                 for item in items:
-                    if self.str_contains(item.test(), string):
+                    if self.str_contains(item.text(), string):
                         item.setSelected(True)
                 self.btn_sel_clr_sub.setText("Clear selection")
         
@@ -823,7 +843,7 @@ class Ui_MainWindow(object):
                 items = [self.listWidget_sub.item(
                     x) for x in range(self.listWidget_sub.count())]
                 for item in items:
-                    if self.str_contains(item.test(), string):
+                    if self.str_contains(item.text(), string):
                         item.setSelected(False)
             self.btn_sel_clr_sub.setText("Select all")
 
@@ -1138,7 +1158,7 @@ class Ui_MainWindow(object):
     def no_data_selected(self):
         if (not self.listWidget_smp.selectedItems() and
             not self.listWidget_bkg.selectedItems() and
-                not self.listWidget_processed.selectedItems()):
+                not self.listWidget_sub.selectedItems()):
             return True
 
     def click_rot_img(self):
@@ -1276,8 +1296,8 @@ class Ui_MainWindow(object):
                     self.background_data[new_name] = self.background_data[old_name]
                     del self.background_data[old_name]
 
-        if len(self.listWidget_processed.selectedIndexes()) != 0:
-            for item in self.listWidget_processed.selectedItems():
+        if len(self.listWidget_sub.selectedIndexes()) != 0:
+            for item in self.listWidget_sub.selectedItems():
                 old_name = item.text()
                 new_name, ok = QInputDialog.getText(
                     MainWindow, 'Rename Dialog', 'Change name from ' + old_name.split("~")[1] + ' to:')
@@ -1428,7 +1448,7 @@ class Ui_MainWindow(object):
                 )
 
                 self.processed_data[out.name] = out
-                self.listWidget_processed.addItem(out.name)
+                self.listWidget_sub.addItem(out.name)
 
         else:
             for count, index in enumerate(self.listWidget_smp.selectedIndexes()):
@@ -1457,7 +1477,7 @@ class Ui_MainWindow(object):
                 )
 
                 self.processed_data[out.name] = out
-                self.listWidget_processed.addItem(out.name)
+                self.listWidget_sub.addItem(out.name)
         self.tabWidget.setCurrentWidget(self.tab_2)
         self.clear_lists()
 
@@ -1597,8 +1617,8 @@ class Ui_MainWindow(object):
                 data = self.background_data[item]
                 # if isinstance(data, Data_2d) or isinstance(data, Data_2d_az):
                 return data
-            if len(self.listWidget_processed.selectedIndexes()) != 0:
-                item = self.listWidget_processed.selectedIndexes()[0].data()
+            if len(self.listWidget_sub.selectedIndexes()) != 0:
+                item = self.listWidget_sub.selectedIndexes()[0].data()
                 data = self.processed_data[item]
                 # if isinstance(data, Data_2d) or isinstance(data, Data_2d_az):
                 return data
@@ -1615,8 +1635,8 @@ class Ui_MainWindow(object):
         if len(self.listWidget_bkg.selectedIndexes()) != 0 and (data_type == "all" or data_type == "bkg"):
             for item in self.listWidget_bkg.selectedIndexes():
                 all_data.append(self.background_data[item.data()])
-        if len(self.listWidget_processed.selectedIndexes()) != 0 and (data_type == "all" or data_type == "sub"):
-            for item in self.listWidget_processed.selectedIndexes():
+        if len(self.listWidget_sub.selectedIndexes()) != 0 and (data_type == "all" or data_type == "sub"):
+            for item in self.listWidget_sub.selectedIndexes():
                 all_data.append(self.processed_data[item.data()])
         return all_data
 
@@ -1632,10 +1652,10 @@ class Ui_MainWindow(object):
             del self.background_data[item.data()]
             self.listWidget_bkg.takeItem(item.row())
 
-        while len(self.listWidget_processed.selectedIndexes()) > 0:
-            item = self.listWidget_processed.selectedIndexes()[0]
+        while len(self.listWidget_sub.selectedIndexes()) > 0:
+            item = self.listWidget_sub.selectedIndexes()[0]
             del self.processed_data[item.data()]
-            self.listWidget_processed.takeItem(item.row())
+            self.listWidget_sub.takeItem(item.row())
 
     def set_plot_image_name(self, name, img_type):
         self.plt_info = (name, img_type)
@@ -1696,7 +1716,7 @@ class Ui_MainWindow(object):
     def clear_lists(self):
         self.listWidget_smp.clearSelection()
         self.listWidget_bkg.clearSelection()
-        self.listWidget_processed.clearSelection()
+        self.listWidget_sub.clearSelection()
 
     def check_overflow_pix(self, array, name):
         num_high_pix = self.count_overflow_pix(array.copy())
@@ -2001,7 +2021,7 @@ class Ui_MainWindow(object):
         elif data_type == "sub":
             data.name = append_name(data.name, self.processed_data)
             self.processed_data[data.name] = data
-            self.listWidget_processed.addItem(
+            self.listWidget_sub.addItem(
                 self.processed_data[data.name].name)
 
     def set_bit_depth(self, array):
@@ -2205,7 +2225,7 @@ class Ui_MainWindow(object):
                     out['info']
                 )
                 # self.processed_data[out["name"]].info = {"type": "sub","dim": "2D"} # add data type, this is not easy to read
-                self.listWidget_processed.addItem(out["name"])
+                self.listWidget_sub.addItem(out["name"])
 
                 # plot data
                 self.set_plot_image_name(out['name'], out['info']['type'])
@@ -2247,7 +2267,7 @@ class Ui_MainWindow(object):
                 # add data type, this is not easy to read
                 self.processed_data[out["name"]].info = {
                     "type": "sub", "dim": "2D"}
-                self.listWidget_processed.addItem(out["name"])
+                self.listWidget_sub.addItem(out["name"])
 
                 # plot data
                 self.set_plot_image_name(out['name'], out['info']['type'])
