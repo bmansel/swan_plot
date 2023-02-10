@@ -147,7 +147,7 @@ class Ui_MainWindow(object):
         self.btn_import_smp.setObjectName("btn_import_smp")
         # select all /clear all button
         self.btn_sel_clr_smp = QtWidgets.QPushButton(
-            self.verticalLayoutWidget, clicked=lambda: self.select_deselect_all("sample"))
+            self.verticalLayoutWidget, clicked=lambda: self.click_select_deselect_all("sample"))
         font = QtGui.QFont()
         font.setStyleName('Microsoft Sans Serif')
         font.setPointSize(11)
@@ -630,7 +630,7 @@ class Ui_MainWindow(object):
         self.groupBox.setTitle(_translate("MainWindow", "WAXS"))
         self.groupBox_2.setTitle(_translate("MainWindow", "Sample"))
         self.btn_import_smp.setText(_translate("MainWindow", "Import"))
-        self.btn_sel_clr_smp.setText(_translate("MainWindow", "select all"))
+        self.btn_sel_clr_smp.setText(_translate("MainWindow", "Select all"))
         self.groupBox_3.setTitle(_translate("MainWindow", "Background"))
         self.btn_import_bkg.setText(_translate("MainWindow", "Import"))
         self.groupBox_4.setTitle(_translate("MainWindow", "Subtracted"))
@@ -689,64 +689,121 @@ class Ui_MainWindow(object):
         self.lbl_chi_points.setText(_translate("MainWindow", "Number of points: "))
 
     ###################################################
-    
-    # def contextMenuEvent(self, event):
-    #     contextMenu = QMenu(self)
-    #     newAct = contextMenu.addAction("New")
-    #     openAct = contextMenu.addAction("Open")
-    #     quitAct = contextMenu.addAction("Quit")
-    #     action = contextMenu.exec_(self.mapToGlobal(event.pos()))
-    def eventFilter(self, source, event):
-        if (event.type() == QtCore.QEvent.ContextMenu and
-                source is self.listWidget_smp):
-            print(source)
-            print(event)
-            menu = QMenu()
-            menu.addAction("Select all", self.select_all("sample"))
-            menu.addAction("Deselect all", self.deselect_all("sample"))
-            menu.exec_(event.globalPos())
-            return True
-        return super().eventFilter(source, event)
-
-    # def clear_type(self, data_type: str):
-    #     if isinstance(Data_2d,data_type)
+  
+    def select_by_filter(self, string, name):
+        if name == "sample":
+            if string == "":
+                self.listWidget_smp.selectAll()
+                self.btn_sel_clr_smp.setText("Clear selection")
+            else:
+                items = [self.listWidget_smp.item(x) for x in range(self.listWidget_smp.count())]
+                for item in items: #range(self.listWidget_smp.count()):
+                    if self.str_contains( item.text(), string):
+                        item.setSelected(True)
+                    
+        elif name == "background":
+            if string == "":
+                self.listWidget_bkg.selectAll()
+                self.btn_sel_clr_bkg.setText("Clear selection")
+            else:
+                items = [self.listWidget_bkg.item(x) for x in range(self.listWidget_bkg.count())]
+                for item in items: #range(self.listWidget_smp.count()):
+                    if self.str_contains( item.text(), string):
+                        item.setSelected(True)
         
-
-    def select_deselect_all(self, name):
-        if name == "sample":
-            if self.btn_sel_clr_smp.text() == "select all":
-                self.select_all("sample")
-            else:
-                self.deselect_all("sample")
-        elif name == "background":
-            if self.btn_sel_clr_bkg.text() == "select all":
-                self.select_all("background")
-            else:
-                self.deselect_all("background")
         elif name == "subtract":
-            if self.btn_sel_clr_sub.text() == "select all":
-                self.select_all("subtract")
+            if string == "":
+                self.listWidget_sub.selectAll()
+                self.btn_sel_clr_sub.setText("Clear selection")
             else:
-                self.deselect_all("subtract")
+                items = [self.listWidget_sub.item(x) for x in range(self.listWidget_sub.count())]
+                for item in items:
+                    if self.str_contains(item.test(), string):
+                        item.setSelected(True)
+        self.btn_sel_clr_smp.setText("Clear selection")
 
-    def deselect_all(self, name):
+    def deselect_by_filter(self, string, name):
         if name == "sample":
-            self.listWidget_smp.clearSelection()
-            self.btn_sel_clr_smp.setText("select all")
+            # deselect all
+            if string == "":
+                self.listWidget_smp.clearSelection()
+                self.btn_sel_clr_smp.setText("Select all")
+            else:
+                items = [self.listWidget_smp.item(x) for x in range(self.listWidget_smp.count())]
+                for item in items: #range(self.listWidget_smp.count()):
+                    if self.str_contains( item.text(), string):
+                        item.setSelected(False)
+        
         elif name == "background":
-            self.listWidget_bkg.clearSelection()
+            if string == "":
+                self.listWidget_bkg.clearSelection()
+                self.btn_sel_clr_bkg.setText("Select all")
+            else:
+                items = [self.listWidget_bkg.item(x) for x in range(self.listWidget_bkg.count())]
+                for item in items: #range(self.listWidget_smp.count()):
+                    if self.str_contains( item.text(), string):
+                        item.setSelected(False)
+            
         elif name == "subtract":
-            self.listWidget_sub.clearSelection()
+            if string == "":
+                self.listWidget_sub.clearSelection()
+                self.btn_sel_clr_sub.setText("Select all")
+            else:
+                items = [self.listWidget_sub.item(x) for x in range(self.listWidget_sub.count())]
+                for item in items:
+                    if self.str_contains(item.test(), string):
+                        item.setSelected(False)
+        self.btn_sel_clr_smp.setText("Select all")
+
+    def str_contains(self, string, substring):
+        if substring in string:
+            return True
+        else:
+            return False
+
+    def click_select_deselect_all(self, name):
+        
+        if self.btn_sel_clr_smp.text() == "Select all":
+            self.select_by_filter(self.lineEdit_smp_filter.text(), name)
+        elif self.btn_sel_clr_smp.text() == "Clear selection":
+            self.deselect_by_filter(self.lineEdit_smp_filter.text(), name)
 
     
-    def select_all(self, name):
-        if name == "sample":
-            self.listWidget_smp.selectAll()
-            self.btn_sel_clr_smp.setText("clear selection")
-        elif name == "background":
-            self.listWidget_bkg.selectAll()
-        elif name == "subtract":
-            self.listWidget_sub.selectAll()
+    # def select_deselect_all(self, name):
+    #     if name == "sample":
+    #         if self.btn_sel_clr_smp.text() == "Select all":
+    #             self.select_all("sample")
+    #         else:
+    #             self.deselect_all("sample")
+    #     elif name == "background":
+    #         if self.btn_sel_clr_bkg.text() == "Select all":
+    #             self.select_all("background")
+    #         else:
+    #             self.deselect_all("background")
+    #     elif name == "subtract":
+    #         if self.btn_sel_clr_sub.text() == "Select all":
+    #             self.select_all("subtract")
+    #         else:
+    #             self.deselect_all("subtract")
+
+    # def deselect_all(self, name):
+    #     if name == "sample":
+    #         self.listWidget_smp.clearSelection()
+    #         self.btn_sel_clr_smp.setText("Select all")
+    #     elif name == "background":
+    #         self.listWidget_bkg.clearSelection()
+    #     elif name == "subtract":
+    #         self.listWidget_sub.clearSelection()
+
+    
+    # def select_all(self, name):
+    #     if name == "sample":
+    #         self.listWidget_smp.selectAll()
+    #         self.btn_sel_clr_smp.setText("Clear selection")
+    #     elif name == "background":
+    #         self.listWidget_bkg.selectAll()
+    #     elif name == "subtract":
+    #         self.listWidget_sub.selectAll()
 
             
     def click_subtract(self):
