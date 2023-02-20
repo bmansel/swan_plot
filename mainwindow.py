@@ -27,7 +27,6 @@ from scipy import ndimage as ndi
 from skimage.morphology import disk
 from skimage import io
 
-
 # adding below for matplotlib
 from PyQt5.QtWidgets import QDialog, QApplication, QPushButton, QVBoxLayout, QInputDialog, QMenu, QAction
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
@@ -100,6 +99,16 @@ class Ui_MainWindow(object):
         self.lbl_smp_TM.setFont(font)
         self.lbl_smp_TM.setObjectName("lbl_smp_TM")
         self.gridLayout.addWidget(self.lbl_smp_TM, 0, 0, 1, 1)
+
+        self.lbl_pbar = QtWidgets.QLabel(self.centralwidget)
+        self.lbl_pbar.setFont(font)
+        self.lbl_pbar.setObjectName("lbl_pbar")
+        self.lbl_pbar.setGeometry(QtCore.QRect(600, 50, 300, 23))
+        self.lbl_pbar.setVisible(False)
+        self.pbar = QtWidgets.QProgressBar(self.centralwidget)
+        self.pbar.setGeometry(QtCore.QRect(600, 70, 300, 23))
+        self.pbar.setVisible(False)
+
         self.groupBox = QtWidgets.QGroupBox(self.centralwidget)
         self.groupBox.setGeometry(QtCore.QRect(20, 100, 951, 771))
         font = QtGui.QFont()
@@ -146,7 +155,7 @@ class Ui_MainWindow(object):
         self.btn_import_smp.setObjectName("btn_import_smp")
         # select all /clear all button
         self.btn_sel_clr_smp = QtWidgets.QPushButton(
-            self.verticalLayoutWidget, clicked=lambda: self.click_select_deselect_all("sample"))
+            self.verticalLayoutWidget, clicked=lambda: self.click_select_deselect_all("smp"))
         font = QtGui.QFont()
         font.setStyleName('Microsoft Sans Serif')
         font.setPointSize(11)
@@ -204,7 +213,7 @@ class Ui_MainWindow(object):
         self.btn_import_bkg.setObjectName("btn_import_bkg")
         # select all /clear all button
         self.btn_sel_clr_bkg = QtWidgets.QPushButton(
-            self.verticalLayoutWidget, clicked=lambda: self.click_select_deselect_all("background"))
+            self.verticalLayoutWidget, clicked=lambda: self.click_select_deselect_all("bkg"))
         font = QtGui.QFont()
         font.setStyleName('Microsoft Sans Serif')
         font.setPointSize(11)
@@ -263,7 +272,7 @@ class Ui_MainWindow(object):
         self.btn_import_subd.setObjectName("btn_import_subd")
         # select all /clear all button
         self.btn_sel_clr_sub = QtWidgets.QPushButton(
-            self.verticalLayoutWidget_3, clicked=lambda: self.click_select_deselect_all("subtract"))
+            self.verticalLayoutWidget_3, clicked=lambda: self.click_select_deselect_all("sub"))
         self.btn_sel_clr_sub.setFont(font)
         self.btn_sel_clr_sub.setObjectName("btn_sel_clr_sub")
         # line edit for subtracted filter
@@ -298,26 +307,32 @@ class Ui_MainWindow(object):
         self.tab.setObjectName("tab")
         self.btn_show = QtWidgets.QPushButton(
             self.groupBox, clicked=lambda: self.click_show_data())
-        self.btn_show.setGeometry(QtCore.QRect(371, 190, 101, 25))
+        self.btn_show.setGeometry(QtCore.QRect(356, 190, 101, 25))
         self.btn_show.setObjectName("btn_show")
         self.btn_show.setFont(font)
         self.btn_sum = QtWidgets.QPushButton(
             self.groupBox, clicked=lambda: self.click_sum_data())
-        self.btn_sum.setGeometry(QtCore.QRect(491, 190, 101, 25))
+        self.btn_sum.setGeometry(QtCore.QRect(471, 190, 101, 25))
         self.btn_sum.setObjectName("btn_sum")
         self.btn_sum.setFont(font)
 
         self.btn_average = QtWidgets.QPushButton(
             self.groupBox, clicked=lambda: self.click_average_data())
-        self.btn_average.setGeometry(QtCore.QRect(611, 190, 101, 25))
+        self.btn_average.setGeometry(QtCore.QRect(586, 190, 101, 25))
         self.btn_average.setObjectName("btn_average")
         self.btn_average.setFont(font)
 
         self.btn_subtract = QtWidgets.QPushButton(
             self.groupBox, clicked=lambda: self.click_subtract())
-        self.btn_subtract.setGeometry(QtCore.QRect(731, 190, 101, 25))
+        self.btn_subtract.setGeometry(QtCore.QRect(701, 190, 101, 25))
         self.btn_subtract.setObjectName("btn_subtract")
         self.btn_subtract.setFont(font)
+
+        self.btn_batch = QtWidgets.QPushButton(
+            self.groupBox, clicked=lambda: self.click_batch_reduce())
+        self.btn_batch.setGeometry(QtCore.QRect(816, 190, 96, 25))
+        self.btn_batch.setObjectName("btn_batch")
+        self.btn_batch.setFont(font)
 
         self.groupBox_5 = QtWidgets.QGroupBox(self.tab)
         self.groupBox_5.setGeometry(QtCore.QRect(739, 40, 181, 161))
@@ -522,7 +537,7 @@ class Ui_MainWindow(object):
         self.btn_remove.setObjectName("btn_remove")
         self.btn_export = QtWidgets.QPushButton(
             self.groupBox, clicked=lambda: self.click_export())
-        self.btn_export.setGeometry(QtCore.QRect(130, 190, 101, 25))
+        self.btn_export.setGeometry(QtCore.QRect(125, 190, 101, 25))
         font = QtGui.QFont()
         font.setStyleName('Helvetica')
         font.setPointSize(11)
@@ -533,7 +548,7 @@ class Ui_MainWindow(object):
 
         self.btn_rename = QtWidgets.QPushButton(
             self.groupBox, clicked=lambda: self.click_rename())
-        self.btn_rename.setGeometry(QtCore.QRect(250, 190, 101, 25))
+        self.btn_rename.setGeometry(QtCore.QRect(240, 190, 101, 25))
         self.btn_rename.setFont(font)
         self.btn_rename.setObjectName("btn_rename")
 
@@ -660,6 +675,7 @@ class Ui_MainWindow(object):
         self.mask = None
         self.bit_depth = None
         self.ai = None
+        self.batch_mode = False
         # self.show_warning_messagebox("The Y direct beam input box is now set to be consistant with pyFAI not FIT2d. For the LFP image and FIT2d use 2352 - Y direct beam. The best option is to always use a .poni file.")
 
         dlg = QtWidgets.QMessageBox(MainWindow)
@@ -704,10 +720,12 @@ class Ui_MainWindow(object):
         self.btn_sum.setText(_translate("MainWindow", "Sum"))
         self.btn_average.setText(_translate("MainWindow", "Average"))
         self.btn_subtract.setText(_translate("MainWindow", "Subtract"))
+        self.btn_batch.setText(_translate("MainWindow", "Batch proc."))
         self.groupBox_5.setTitle(_translate("MainWindow", "Remove outliers:"))
         self.groupBox_rot_img.setTitle(
             _translate("MainWindow", "Rotate image:"))
         self.lbl_rot_ang.setText(_translate("MainWindow", "Angle:"))
+        self.lbl_pbar.setText(_translate("MainWindow", "Progress:"))
         # self.btn_get_rot_ang.setText(_translate("MainWindow", "Get angle"))
         self.btn_rot_img.setText(_translate("MainWindow", "Apply"))
         self.label.setText(_translate("MainWindow", "Radius:"))
@@ -771,9 +789,38 @@ class Ui_MainWindow(object):
             "MainWindow", "Number of points: "))
 
     ###################################################
+    
+     
+    def click_batch_reduce(self):
 
+        # set batch mode
+        self.groupBox.setEnabled(False)
+        self.lbl_pbar.setVisible(True)
+        self.pbar.setVisible(True)
+        self.lbl_pbar.setText("Batch processing...")
+        self.pbar.setValue(0)
+
+        self.batch_mode = True
+        QApplication.processEvents()
+        self.click_rem_outliers() # deselects and selects OLR data
+        self.lbl_pbar.setText("Removed outliers...1/3")
+        self.pbar.setValue(33)
+        QApplication.processEvents()
+        self.click_subtract()
+        self.lbl_pbar.setText("Subtracted...2/3")
+        self.pbar.setValue(66)
+        QApplication.processEvents()
+        self.tabWidget.setCurrentIndex(1)
+        QApplication.processEvents()
+        self.click_integrate()
+        self.lbl_pbar.setText("Integrated...3/3")
+        self.pbar.setValue(100)
+        self.batch_mode = False
+        self.groupBox.setEnabled(True)
+    
+        
     def select_by_filter(self, string, name):
-        if name == "sample":
+        if name == "smp":
             if string == "":
                 self.listWidget_smp.selectAll()
                 self.btn_sel_clr_smp.setText("Clear selection")
@@ -785,7 +832,7 @@ class Ui_MainWindow(object):
                         item.setSelected(True)
                 self.btn_sel_clr_smp.setText("Clear selection")
 
-        elif name == "background":
+        elif name == "bkg":
             if string == "":
                 self.listWidget_bkg.selectAll()
                 self.btn_sel_clr_bkg.setText("Clear selection")
@@ -797,7 +844,7 @@ class Ui_MainWindow(object):
                         item.setSelected(True)
                 self.btn_sel_clr_bkg.setText("Clear selection")
 
-        elif name == "subtract":
+        elif name == "sub":
             if string == "":
                 self.listWidget_sub.selectAll()
                 self.btn_sel_clr_sub.setText("Clear selection")
@@ -811,7 +858,7 @@ class Ui_MainWindow(object):
         
 
     def deselect_by_filter(self, string, name):
-        if name == "sample":
+        if name == "smp":
             if string == "":
                 self.listWidget_smp.clearSelection()
                 self.btn_sel_clr_smp.setText("Select all")
@@ -823,7 +870,7 @@ class Ui_MainWindow(object):
                         item.setSelected(False)
                 self.btn_sel_clr_smp.setText("Select all")
 
-        elif name == "background":
+        elif name == "bkg":
             if string == "":
                 self.listWidget_bkg.clearSelection()
                 self.btn_sel_clr_bkg.setText("Select all")
@@ -835,7 +882,7 @@ class Ui_MainWindow(object):
                         item.setSelected(False)
                 self.btn_sel_clr_bkg.setText("Select all")
 
-        elif name == "subtract":
+        elif name == "sub":
             if string == "":
                 self.listWidget_sub.clearSelection()
                 self.btn_sel_clr_sub.setText("Select all")
@@ -854,17 +901,17 @@ class Ui_MainWindow(object):
             return False
 
     def click_select_deselect_all(self, name):
-        if name == "sample":
+        if name == "smp":
             if self.btn_sel_clr_smp.text() == "Select all":
                 self.select_by_filter(self.lineEdit_smp_filter.text(), name)
             elif self.btn_sel_clr_smp.text() == "Clear selection":
                 self.deselect_by_filter(self.lineEdit_smp_filter.text(), name)
-        elif name == "background":
+        elif name == "bkg":
             if self.btn_sel_clr_bkg.text() == "Select all":
                 self.select_by_filter(self.lineEdit_bkg_filter.text(), name)
             elif self.btn_sel_clr_bkg.text() == "Clear selection":
                 self.deselect_by_filter(self.lineEdit_bkg_filter.text(), name)
-        elif name == "subtract":
+        elif name == "sub":
             if self.btn_sel_clr_sub.text() == "Select all":
                 self.select_by_filter(self.lineEdit_sub_filter.text(), name)
             elif self.btn_sel_clr_sub.text() == "Clear selection":
@@ -1867,8 +1914,14 @@ class Ui_MainWindow(object):
                 ),
                 data_2d.info["type"]
             )
+            if self.batch_mode:
+                self.deselect_by_filter(data_2d.name,data_2d.info["type"])
+                self.select_by_filter(corr_data['name'],data_2d.info["type"])
+
         self.plot_2D(im_corr, "2D~" + "OLrm_" + data_2d.name.split("~")[1])
-        self.clear_lists()
+        
+        if not self.batch_mode:
+            self.clear_lists()
 
     def plot_1D_1D_data(self, axis, q, I, err, label):
         axis.errorbar(q, I, yerr=err, label=label)
@@ -2226,11 +2279,15 @@ class Ui_MainWindow(object):
                 )
                 # self.processed_data[out["name"]].info = {"type": "sub","dim": "2D"} # add data type, this is not easy to read
                 self.listWidget_sub.addItem(out["name"])
+                if self.batch_mode:
+                    # select processed item
+                    self.select_by_filter(out["name"],"sub")
 
-                # plot data
-                self.set_plot_image_name(out['name'], out['info']['type'])
-                self.plot_2D(
-                    self.processed_data[out["name"]].array, out['name'])
+
+            # plot data
+            self.set_plot_image_name(out['name'], out['info']['type'])
+            self.plot_2D(
+                self.processed_data[out["name"]].array, out['name'])
         else:
             for count, index in enumerate(self.listWidget_smp.selectedIndexes()):
                 bkg_name = self.listWidget_bkg.selectedIndexes()[count].data()
@@ -2269,16 +2326,21 @@ class Ui_MainWindow(object):
                     "type": "sub", "dim": "2D"}
                 self.listWidget_sub.addItem(out["name"])
 
-                # plot data
-                self.set_plot_image_name(out['name'], out['info']['type'])
-                self.plot_2D(
-                    self.processed_data[out["name"]].data, out['name'])  # here
+                if self.batch_mode:
+                    # select processed item
+                    self.select_by_filter(out["name"],"sub")
+
+            # plot data
+            self.set_plot_image_name(out['name'], out['info']['type'])
+            self.plot_2D(
+                self.processed_data[out["name"]].data, out['name'])  # here
 
         # except:
         #    self.show_warning_messagebox("2d images not compatible.")
         #    return
         self.tabWidget.setCurrentWidget(self.tab)
-        self.clear_lists()
+        self.listWidget_smp.clearSelection()
+        self.listWidget_bkg.clearSelection()
 
 
 if __name__ == "__main__":

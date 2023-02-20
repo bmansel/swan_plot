@@ -443,7 +443,7 @@ class Data_2d:
         # Bright  and dark:
         #outliers = (image > median_filtered + threshold) | (image < median_filtered - threshold)
         # bright only
-        outliers = (self.array > median_filtered + threshold)
+        outliers = (self.array > median_filtered + threshold) | (self.array < median_filtered - threshold)
         
         output = np.where(outliers,median_filtered,self.array)
         return output
