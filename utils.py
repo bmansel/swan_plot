@@ -4,6 +4,8 @@ This is it
 '''
 from time import perf_counter
 import sys 
+import tomli
+import tomli_w
 #sys.path.insert(0, "/opt/dectris/albula/4.1/bin") 
 #sys.path.insert(0, "/opt/dectris/albula/4.1/python") 
 #import dectris.albula

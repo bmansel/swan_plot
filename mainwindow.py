@@ -223,14 +223,14 @@ class Ui_MainWindow(object):
         self.btn_sel_clr_bkg.setObjectName("btn_sel_clr__bkg")
         # line edit for sample filter
         self.lineEdit_bkg_filter = QtWidgets.QLineEdit(
-            self.verticalLayoutWidget_2 )
+            self.verticalLayoutWidget_2)
         self.lineEdit_bkg_filter.setEnabled(True)
         self.lineEdit_bkg_filter.setObjectName("lineEdit_bkg_filter")
         # add buttons and lineEdit to horizontal layout
         self.horizontal_btn_Layout_2.addWidget(self.btn_import_bkg)
         self.horizontal_btn_Layout_2.addWidget(self.btn_sel_clr_bkg)
         self.horizontal_btn_Layout_2.addWidget(self.lineEdit_bkg_filter)
-        #self.verticalLayout_2.addWidget(self.btn_import_bkg)
+        # self.verticalLayout_2.addWidget(self.btn_import_bkg)
         # list widget
         self.listWidget_bkg = QtWidgets.QListWidget(
             self.verticalLayoutWidget_2)
@@ -676,26 +676,32 @@ class Ui_MainWindow(object):
         self.bit_depth = None
         self.ai = None
         self.batch_mode = False
+
+        self.BL23A_mode = True
         # self.show_warning_messagebox("The Y direct beam input box is now set to be consistant with pyFAI not FIT2d. For the LFP image and FIT2d use 2352 - Y direct beam. The best option is to always use a .poni file.")
 
-        dlg = QtWidgets.QMessageBox(MainWindow)
-        dlg.setWindowTitle("Use FIT2d mode?")
-        dlg.setText("FIT2d uses flipped images, select Yes to set FIT2d mode and directly enter calibration values outputted from FIT2d. Otherwise select No and input a .poni file.")
-        dlg.setStandardButtons(QtWidgets.QMessageBox.Yes |
-                               QtWidgets.QMessageBox.No)
-        dlg.setIcon(QtWidgets.QMessageBox.Question)
-        button = dlg.exec()
-        if button == QtWidgets.QMessageBox.Yes:
-            self.fit2d_mode = True
-        else:
-            self.fit2d_mode = False
+        if not self.BL23A_mode:
+            dlg = QtWidgets.QMessageBox(MainWindow)
+            dlg.setWindowTitle("Use FIT2d mode?")
+            dlg.setText("FIT2d uses flipped images, select Yes to set FIT2d mode and directly enter calibration values outputted from FIT2d. Otherwise select No and input a .poni file.")
+            dlg.setStandardButtons(QtWidgets.QMessageBox.Yes |
+                                QtWidgets.QMessageBox.No)
+            dlg.setIcon(QtWidgets.QMessageBox.Question)
+            button = dlg.exec()
+            if button == QtWidgets.QMessageBox.Yes:
+                self.fit2d_mode = True
+            else:
+                self.fit2d_mode = False
 
         self.sample_data = {}
         self.background_data = {}
         self.processed_data = {}
 
         self.retranslateUi(MainWindow)
-        self.tabWidget.setCurrentIndex(0)
+        if self.BL23A_mode:
+            self.set_BL23A_mode()
+        self.tabWidget.setCurrentIndex(2)
+        self.set_enable_data_operations(False)
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
 
     def retranslateUi(self, MainWindow):
@@ -789,36 +795,71 @@ class Ui_MainWindow(object):
             "MainWindow", "Number of points: "))
 
     ###################################################
+
+    def set_enable_data_operations(self,state):
+        self.tab.setEnabled(state)
+        self.tab_2.setEnabled(state)
+        self.groupBox_2.setEnabled(state)
+        self.groupBox_3.setEnabled(state)
+        self.groupBox_4.setEnabled(state)
+        self.btn_remove.setEnabled(state)
+        self.btn_export.setEnabled(state)
+        self.btn_rename.setEnabled(state)
+        self.btn_show.setEnabled(state)
+        self.btn_sum.setEnabled(state)
+        self.btn_average.setEnabled(state)
+        self.btn_subtract.setEnabled(state)
+        self.btn_batch.setEnabled(state)
+        self.btn_load_mask.setEnabled(state)
+        self.btn_load_reject.setEnabled(state)
+        self.dsb_scale_factor.setEnabled(state)
     
-     
+    def set_BL23A_mode(self):
+        self.btn_load_PSAXS.setVisible(True)
+        self.fit2d_mode = True
+        self.cb_002.setVisible(False)
+        self.btn_load_PONI.setText("Load params")
+        self.btn_save_PONI.setText("Save params")
+        self.btn_2d_integrate.setVisible(False)
+        self.btn_load_PSAXS.setVisible(False)
+
+    
     def click_batch_reduce(self):
+        try:
+            # set batch mode
+            self.groupBox.setEnabled(False)
+            self.lbl_pbar.setVisible(True)
+            self.pbar.setVisible(True)
+            self.lbl_pbar.setText("Batch processing...")
+            self.pbar.setValue(0)
 
-        # set batch mode
-        self.groupBox.setEnabled(False)
-        self.lbl_pbar.setVisible(True)
-        self.pbar.setVisible(True)
-        self.lbl_pbar.setText("Batch processing...")
-        self.pbar.setValue(0)
+            self.batch_mode = True
+            QApplication.processEvents()
+            self.click_rem_outliers()  # deselects and selects OLR data
+            self.lbl_pbar.setText("Removed outliers...1/4")
+            self.pbar.setValue(25)
+            QApplication.processEvents()
+            self.click_subtract()
+            self.lbl_pbar.setText("Subtracted...2/4")
+            self.pbar.setValue(50)
+            QApplication.processEvents()
+            self.tabWidget.setCurrentIndex(1)
+            QApplication.processEvents()
+            self.click_integrate()
+            self.lbl_pbar.setText("Integrated...3/4")
+            self.pbar.setValue(75)
+            QApplication.processEvents()
+            self.get_first_sel()
+            self.click_export()
+            self.lbl_pbar.setText("Exported all subtracted...4/4")
+            self.pbar.setValue(100)
+            self.batch_mode = False
+            self.groupBox.setEnabled(True)
+            self.listWidget_sub.clearSelection()
+        except:
+            self.show_warning_messagebox("Batch processing failed, check that sample and background data are selected. Or that the geometry is set correctly.")
+            self.groupBox.setEnabled(True)
 
-        self.batch_mode = True
-        QApplication.processEvents()
-        self.click_rem_outliers() # deselects and selects OLR data
-        self.lbl_pbar.setText("Removed outliers...1/3")
-        self.pbar.setValue(33)
-        QApplication.processEvents()
-        self.click_subtract()
-        self.lbl_pbar.setText("Subtracted...2/3")
-        self.pbar.setValue(66)
-        QApplication.processEvents()
-        self.tabWidget.setCurrentIndex(1)
-        QApplication.processEvents()
-        self.click_integrate()
-        self.lbl_pbar.setText("Integrated...3/3")
-        self.pbar.setValue(100)
-        self.batch_mode = False
-        self.groupBox.setEnabled(True)
-    
-        
     def select_by_filter(self, string, name):
         if name == "smp":
             if string == "":
@@ -839,7 +880,7 @@ class Ui_MainWindow(object):
             else:
                 items = [self.listWidget_bkg.item(
                     x) for x in range(self.listWidget_bkg.count())]
-                for item in items:  
+                for item in items:
                     if self.str_contains(item.text(), string):
                         item.setSelected(True)
                 self.btn_sel_clr_bkg.setText("Clear selection")
@@ -855,7 +896,6 @@ class Ui_MainWindow(object):
                     if self.str_contains(item.text(), string):
                         item.setSelected(True)
                 self.btn_sel_clr_sub.setText("Clear selection")
-        
 
     def deselect_by_filter(self, string, name):
         if name == "smp":
@@ -877,7 +917,7 @@ class Ui_MainWindow(object):
             else:
                 items = [self.listWidget_bkg.item(
                     x) for x in range(self.listWidget_bkg.count())]
-                for item in items:  
+                for item in items:
                     if self.str_contains(item.text(), string):
                         item.setSelected(False)
                 self.btn_sel_clr_bkg.setText("Select all")
@@ -1580,48 +1620,93 @@ class Ui_MainWindow(object):
                         new_data.err,
                         new_data.name.split("~")[1]
                     )
-
+                    if self.batch_mode:
+                        self.select_by_filter(new_data.name, "sub")
             self.canvas2.draw()
-            self.clear_lists()
+            if not self.batch_mode:
+                self.clear_lists()
 
     def click_load_PONI(self):
-        if self.fit2d_mode:
-            self.show_warning_messagebox(
-                "FIT2d mode is currently set so the image is flipped compared to .poni orientation. Please restart and set no to FIT2d option or proceed with care!")
-        fname, _ = QtWidgets.QFileDialog.getOpenFileName(
-            MainWindow, "Select PONI file", "", "PONI (*.poni);;All Files (*)")
-        if fname and fname != "":
-            self.ai = pyFAI.load(fname)
-            Fit2dDic = self.ai.getFit2D()
-            # print(Fit2dDic)
-            self.lineEdit_X.setText(str(Fit2dDic["pixelX"])[0:12])
-            self.lineEdit_Y.setText(str(Fit2dDic["pixelY"])[0:12])
-            # .text(Fit2dDic["directDist"])
-            self.lineEdit_SD.setText(str(Fit2dDic["directDist"])[0:12])
-            self.lineEdit_wavelength.setText(
-                str(10_000_000_000 * self.ai.get_wavelength())[0:12])
-            self.lineEdit_X_dir.setText(str(Fit2dDic["centerX"])[0:12])
-            # invert Y below ###############################################
-            self.lineEdit_Y_dir.setText(
-                str(Fit2dDic["centerY"])[0:12])  # 2352 -
-            #################################################################
-            self.lineEdit_rotAngTiltPlane.setText(
-                str(Fit2dDic["tiltPlanRotation"])[0:12])
-            self.lineEdit_angDetTilt.setText(str(Fit2dDic["tilt"])[0:12])
+        try:
+            if self.BL23A_mode:
+                fname, _ = QtWidgets.QFileDialog.getOpenFileName(
+                        MainWindow, "Select parameter file.toml", "", "toml (*.toml);;All Files (*)")
+                if fname and fname != "":
+                    with open(fname, "rb") as f:
+                        Fit2dDic = tomli.load(f)
+                    print(Fit2dDic)
+                    self.ai = azimuthalIntegrator.AzimuthalIntegrator(wavelength=Fit2dDic["waveLength"] / 10_000_000_000)
 
+                    self.ai.setFit2D(
+                        Fit2dDic["directDist"],
+                        Fit2dDic["centerX"],
+                        Fit2dDic["centerY"],    # 2352 -
+                        Fit2dDic["tilt"],
+                        Fit2dDic["tiltPlanRotation"],
+                        Fit2dDic["pixelX"],
+                        Fit2dDic["pixelY"]
+                    )
+                    self.fill_param_settings(Fit2dDic)
+                    self.disable_params_input()
+                    self.set_enable_data_operations(True)
+            else:
+                if self.fit2d_mode:
+                    self.show_warning_messagebox(
+                        "FIT2d mode is currently set so the image is flipped compared to .poni orientation. Please restart and set no to FIT2d option or proceed with care!")
+                fname, _ = QtWidgets.QFileDialog.getOpenFileName(
+                    MainWindow, "Select PONI file", "", "PONI (*.poni);;All Files (*)")
+                if fname and fname != "":
+                    self.ai = pyFAI.load(fname)
+                    Fit2dDic = self.ai.getFit2D()
+                    # print(Fit2dDic)
+                    self.fill_param_settings(Fit2dDic)
+                    self.disable_params_input()
+                    self.set_enable_data_operations(True)
+        except:
+            self.show_warning_messagebox(
+                "Error in loading file, please check the file and try again")
+        
+    def fill_param_settings(self, Fit2dDic):    
+        self.lineEdit_X.setText(str(Fit2dDic["pixelX"])[0:12])
+        self.lineEdit_Y.setText(str(Fit2dDic["pixelY"])[0:12])
+        # .text(Fit2dDic["directDist"])
+        self.lineEdit_SD.setText(str(Fit2dDic["directDist"])[0:12])
+        self.lineEdit_wavelength.setText(
+            str(10_000_000_000 * self.ai.get_wavelength())[0:12])
+        self.lineEdit_X_dir.setText(str(Fit2dDic["centerX"])[0:12])
+        # invert Y below ###############################################
+        self.lineEdit_Y_dir.setText(
+            str(Fit2dDic["centerY"])[0:12])  # 2352 -
+        #################################################################
+        self.lineEdit_rotAngTiltPlane.setText(
+            str(Fit2dDic["tiltPlanRotation"])[0:12])
+        self.lineEdit_angDetTilt.setText(str(Fit2dDic["tilt"])[0:12])
+
+    def disable_params_input(self):
+        self.lineEdit_X.setDisabled(True)
+        self.lineEdit_Y.setDisabled(True)
+        self.lineEdit_SD.setDisabled(True)
+        self.lineEdit_wavelength.setDisabled(True)
+        self.lineEdit_X_dir.setDisabled(True)
+        self.lineEdit_Y_dir.setDisabled(True)
+        self.lineEdit_rotAngTiltPlane.setDisabled(True)
+        self.lineEdit_angDetTilt.setDisabled(True)
+        self.btn_load_PONI.setDisabled(True)
+        self.btn_save_PONI.setDisabled(True)
+    
+    
     def click_save_PONI(self):
 
         plankC = float(4.135667696e-15)
         speedLightC = float(299_792_458)
-
         try:
-
             Fit2dDic = {}
             Fit2dDic["pixelX"] = float(self.lineEdit_X.text().strip())
-            Fit2dDic["pixelY"] = float(self.lineEdit_X.text().strip())
+            Fit2dDic["pixelY"] = float(self.lineEdit_Y.text().strip())
             Fit2dDic["directDist"] = float(self.lineEdit_SD.text().strip())
-            Fit2dDic["energy"] = plankC * speedLightC / 1000 / \
-                float(self.lineEdit_wavelength.text().strip()) / 10_000_000_000
+            Fit2dDic["waveLength"] = float(self.lineEdit_wavelength.text().strip()) / 10_000_000_000
+            #Fit2dDic["energy"] = plankC * speedLightC / 1000 / \
+            #    float(self.lineEdit_wavelength.text().strip()) / 10_000_000_000
             Fit2dDic["centerX"] = float(self.lineEdit_X_dir.text().strip())
             Fit2dDic["centerY"] = float(self.lineEdit_Y_dir.text().strip())
             Fit2dDic["tiltPlanRotation"] = float(
@@ -1641,15 +1726,27 @@ class Ui_MainWindow(object):
                 Fit2dDic["pixelY"]
             )
 
-            fname, _ = QtWidgets.QFileDialog.getSaveFileName(
-                MainWindow, "Poni file save name", "", "PONI (*.poni);;All Files (*)")
+            if self.BL23A_mode:
+                fname, _ = QtWidgets.QFileDialog.getSaveFileName(
+                    MainWindow, "Parameter file save name", "", "toml (*.toml);;All Files (*)")
+                if fname and fname != "":
+                    if os.path.splitext(fname)[1] != ".toml":
+                        fname += ".toml"
+                    with open(fname, "wb") as f:
+                        tomli_w.dump(Fit2dDic, f)
+            else:
+                fname, _ = QtWidgets.QFileDialog.getSaveFileName(
+                    MainWindow, "Poni file save name", "", "PONI (*.poni);;All Files (*)")
 
-            self.ai.write(fname)
+                self.ai.write(fname)
+            self.disable_params_input()
+            self.set_enable_data_operations(True)
+
         except:
             self.show_warning_messagebox("Please check your input values!")
             return
-        # print(self.ai)
-        # print(self.ai.getFit2D())
+            # print(self.ai)
+            # print(self.ai.getFit2D())
 
     def get_first_sel(self):
         try:
@@ -1812,26 +1909,43 @@ class Ui_MainWindow(object):
             data.array = data.array.astype('int16')
         elif self.bit_depth == 8:
             data.array = data.array.astype('int8')
+        if not self.batch_mode:
+            path = os.path.join(data.dir, data.name.split(
+                "~")[1] + '.' + 'tif')  # always save as tif
+            if os.path.exists(path):
+                old_path = path
+                path = self.append_file(path)
+                self.show_warning_messagebox(
+                    'File ' + old_path + ' found, saving to ' + path)
+            tifffile.imwrite(path, data.array, dtype=data.array.dtype)
+            
+        else:
+            if not os.path.exists(os.path.join(data.dir, 'batch_reduced')):
+                os.mkdir(os.path.join(data.dir, 'batch_reduced'))
 
-        path = os.path.join(data.dir, data.name.split(
-            "~")[1] + '.' + 'tif')  # always save as tif
-        if os.path.exists(path):
-            old_path = path
-            path = self.append_file(path)
-            self.show_warning_messagebox(
-                'File ' + old_path + ' found, saving to ' + path)
-        tifffile.imwrite(path, data.array, dtype=data.array.dtype)
-        self.clear_lists()
+            path = os.path.join(data.dir, 'batch_reduced', data.name.split(
+                "~")[1] + '.' + 'tif')
+            tifffile.imwrite(path, data.array, dtype=data.array.dtype)
+
 
     def export_single_dat(self, data):
-        path = os.path.join(data.dir, data.name.split("~")[1] + '.' + data.ext)
-        if os.path.exists(path):
-            old_path = path
-            path = self.append_file(path)
-            self.show_warning_messagebox(
-                'File ' + old_path + ' found, saving to ' + path)
-        np.savetxt(path, np.transpose(
-            [data.q, data.I, data.err]), fmt='%1.6e', delimiter='    ')
+        if not self.batch_mode:
+            path = os.path.join(data.dir, data.name.split("~")[1] + '.' + data.ext)
+            if os.path.exists(path):
+                old_path = path
+                path = self.append_file(path)
+                self.show_warning_messagebox(
+                    'File ' + old_path + ' found, saving to ' + path)
+            np.savetxt(path, np.transpose(
+                [data.q, data.I, data.err]), fmt='%1.6e', delimiter='    ')
+        else:
+            if not os.path.exists(os.path.join(data.dir, 'batch_reduced')):
+                os.mkdir(os.path.join(data.dir, 'batch_reduced'))
+
+            path = os.path.join(data.dir, 'batch_reduced', data.name.split("~")[1] + '.' + data.ext)
+            np.savetxt(path, np.transpose(
+                [data.q, data.I, data.err]), fmt='%1.6e', delimiter='    ')
+
 
     def click_export(self):
 
@@ -1915,11 +2029,11 @@ class Ui_MainWindow(object):
                 data_2d.info["type"]
             )
             if self.batch_mode:
-                self.deselect_by_filter(data_2d.name,data_2d.info["type"])
-                self.select_by_filter(corr_data['name'],data_2d.info["type"])
+                self.deselect_by_filter(data_2d.name, data_2d.info["type"])
+                self.select_by_filter(corr_data['name'], data_2d.info["type"])
 
         self.plot_2D(im_corr, "2D~" + "OLrm_" + data_2d.name.split("~")[1])
-        
+
         if not self.batch_mode:
             self.clear_lists()
 
@@ -2092,12 +2206,14 @@ class Ui_MainWindow(object):
     def init_image_import(self, array):
         if self.bit_depth is None:
             self.set_bit_depth(array)
-            self.show_warning_messagebox("Image bit depth of " + str(self.bit_depth) +
+            if not self.BL23A_mode:
+                self.show_warning_messagebox("Image bit depth of " + str(self.bit_depth) +
                                          " found and will be used for writing and manipulating images, please be aware of bit overflow\nMax value for images is " + str(2**self.bit_depth - 1))
 
         if self.saturated_pix_mask is False:
             self.mask = make_saturated_mask(array, self.bit_depth)
-            self.show_warning_messagebox("Masked " + str(np.sum(self.mask)) +
+            if not self.BL23A_mode:
+                self.show_warning_messagebox("Masked " + str(np.sum(self.mask)) +
                                          " saturated pixels which had values of 2^" + str(self.bit_depth) + "-1")
             self.saturated_pix_mask = True
 
@@ -2281,8 +2397,7 @@ class Ui_MainWindow(object):
                 self.listWidget_sub.addItem(out["name"])
                 if self.batch_mode:
                     # select processed item
-                    self.select_by_filter(out["name"],"sub")
-
+                    self.select_by_filter(out["name"], "sub")
 
             # plot data
             self.set_plot_image_name(out['name'], out['info']['type'])
@@ -2328,7 +2443,7 @@ class Ui_MainWindow(object):
 
                 if self.batch_mode:
                     # select processed item
-                    self.select_by_filter(out["name"],"sub")
+                    self.select_by_filter(out["name"], "sub")
 
             # plot data
             self.set_plot_image_name(out['name'], out['info']['type'])
