@@ -5,33 +5,22 @@ from utils import *
 import ctypes
 
 import sys
-# sys.path.insert(0, "/opt/dectris/albula/4.1/bin")
-# sys.path.insert(0, "/opt/dectris/albula/4.1/python")
-# import dectris.albula
+
 import numpy as np
 import fabio
 import os
 import tifffile
 import pyFAI
-# import imutils
-# import cv2
-import PIL.Image as IImage
-
 from pyFAI import azimuthalIntegrator
 from PyQt5 import QtCore, QtGui, QtWidgets
-# from dataclasses import dataclass
 from matplotlib import pyplot
 from pathlib import Path
-
-#from scipy import ndimage as ndi
-from skimage.morphology import disk
-from skimage import io
 
 # adding below for matplotlib
 from PyQt5.QtWidgets import QDialog, QApplication, QPushButton, QVBoxLayout, QInputDialog, QMenu, QAction
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 from matplotlib.colors import SymLogNorm
 import random
 
@@ -42,8 +31,8 @@ class Ui_MainWindow(object):
         MainWindow.resize(1000, 900)
         #####################################################################
         # not needed on linux etc
-        myappid = u'LFP_reduction'
-        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
+        #myappid = u'LFP_reduction'
+        #ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
         #####################################################################
         MainWindow.setWindowIcon(QtGui.QIcon('../images/icon.png'))
         self.centralwidget = QtWidgets.QWidget(MainWindow)
@@ -973,11 +962,11 @@ class Ui_MainWindow(object):
         bkg = self.background_data[self.listWidget_bkg.selectedIndexes()[
             0].data()]
         if isinstance(smp, Data_2d) and isinstance(bkg, Data_2d):
-            try:
-                self.subtract_2D()
-            except:
-                self.show_warning_messagebox(
-                    "Subtraction failed. Check that the data dimensions match.")
+            #try:
+            self.subtract_2D()
+            #except:
+            #    self.show_warning_messagebox(
+            #        "Subtraction failed. Check that the data dimensions match.")
 
         elif isinstance(smp, Data_1d) and isinstance(bkg, Data_1d):
             try:
@@ -2411,11 +2400,11 @@ class Ui_MainWindow(object):
         else:
             for count, index in enumerate(self.listWidget_smp.selectedIndexes()):
                 bkg_name = self.listWidget_bkg.selectedIndexes()[count].data()
-
+                bkg_data = self.background_data[bkg_name].array
                 if self.mask is not None:
                     bkg_data = self.mask_pix_zero(bkg_data)
 
-                bkg_data = self.background_data[bkg_name].array
+                #bkg_data = self.background_data[bkg_name].array
                 out = {}
                 # out['path'] = os.path.join(self.sample_data[index.data()].dir,  "subd_" + self.sample_data[index.data()].name)
                 out['dir'] = self.sample_data[index.data()].dir
@@ -2423,8 +2412,9 @@ class Ui_MainWindow(object):
                 name = self.sample_data[index.data()].name
                 out['name'] = name.split(
                     "~")[0] + "~" + "subd_" + name.split("~")[1]
-                out['name'] = self.append_name(
+                out['name'] = append_name(
                     out['name'], self.processed_data)  # add one if exists
+                out['info'] = {"type": "sub"}
                 if self.mask is not None:
                     smp_data = self.mask_pix_zero(
                         self.sample_data[index.data()].array)
@@ -2433,7 +2423,7 @@ class Ui_MainWindow(object):
 
                 part1 = np.divide(smp_data, float(self.lineEdit_smp_TM.text()))
                 part2 = np.divide(bkg_data, float(self.lineEdit_bkg_TM.text()))
-                out['data'] = np.subtract(part1, part2)
+                out['array'] = np.subtract(part1, part2)
                 self.processed_data[out["name"]] = Data_2d(
                     out['dir'],
                     out['ext'],
@@ -2453,7 +2443,7 @@ class Ui_MainWindow(object):
             # plot data
             self.set_plot_image_name(out['name'], out['info']['type'])
             self.plot_2D(
-                self.processed_data[out["name"]].data, out['name'])  # here
+                self.processed_data[out["name"]].array, out['name'])  # here
 
         # except:
         #    self.show_warning_messagebox("2d images not compatible.")
