@@ -23,7 +23,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 from matplotlib import pyplot
 from pathlib import Path
 
-from scipy import ndimage as ndi
+#from scipy import ndimage as ndi
 from skimage.morphology import disk
 from skimage import io
 
@@ -42,8 +42,8 @@ class Ui_MainWindow(object):
         MainWindow.resize(1000, 900)
         #####################################################################
         # not needed on linux etc
-        # myappid = u'SWAN_plot'
-        # ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
+        myappid = u'LFP_reduction'
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
         #####################################################################
         MainWindow.setWindowIcon(QtGui.QIcon('../images/icon.png'))
         self.centralwidget = QtWidgets.QWidget(MainWindow)
@@ -706,7 +706,7 @@ class Ui_MainWindow(object):
 
     def retranslateUi(self, MainWindow):
         _translate = QtCore.QCoreApplication.translate
-        MainWindow.setWindowTitle(_translate("MainWindow", "SWAN Plot"))
+        MainWindow.setWindowTitle(_translate("MainWindow", "LFP reduction"))
         self.grpBx_TM.setTitle(_translate("MainWindow", "TM"))
         self.lineEdit_bkg_TM.setText(_translate("MainWindow", "1.0"))
         self.lbl_bkg_TM.setText(_translate("MainWindow", "Background TM:"))
@@ -857,45 +857,52 @@ class Ui_MainWindow(object):
             self.groupBox.setEnabled(True)
             self.listWidget_sub.clearSelection()
         except:
-            self.show_warning_messagebox("Batch processing failed, check that sample and background data are selected. Or that the geometry is set correctly.")
+            self.show_warning_messagebox("Batch processing failed, \
+            check that sample and background data are selected. \
+            Or that the geometry is set correctly.")
+            self.batch_mode = False
             self.groupBox.setEnabled(True)
 
     def select_by_filter(self, string, name):
         if name == "smp":
             if string == "":
                 self.listWidget_smp.selectAll()
-                self.btn_sel_clr_smp.setText("Clear selection")
+                if not self.batch_mode:
+                    self.btn_sel_clr_smp.setText("Clear selection")
             else:
                 items = [self.listWidget_smp.item(
                     x) for x in range(self.listWidget_smp.count())]
                 for item in items:  # range(self.listWidget_smp.count()):
                     if self.str_contains(item.text(), string):
                         item.setSelected(True)
-                self.btn_sel_clr_smp.setText("Clear selection")
-
+                if not self.batch_mode:
+                    self.btn_sel_clr_smp.setText("Clear selection")
         elif name == "bkg":
             if string == "":
                 self.listWidget_bkg.selectAll()
-                self.btn_sel_clr_bkg.setText("Clear selection")
+                if not self.batch_mode:
+                    self.btn_sel_clr_bkg.setText("Clear selection")
             else:
                 items = [self.listWidget_bkg.item(
                     x) for x in range(self.listWidget_bkg.count())]
                 for item in items:
                     if self.str_contains(item.text(), string):
                         item.setSelected(True)
-                self.btn_sel_clr_bkg.setText("Clear selection")
-
+                if not self.batch_mode:
+                    self.btn_sel_clr_bkg.setText("Clear selection")
         elif name == "sub":
             if string == "":
                 self.listWidget_sub.selectAll()
-                self.btn_sel_clr_sub.setText("Clear selection")
+                if not self.batch_mode:
+                    self.btn_sel_clr_sub.setText("Clear selection")
             else:
                 items = [self.listWidget_sub.item(
                     x) for x in range(self.listWidget_sub.count())]
                 for item in items:
                     if self.str_contains(item.text(), string):
                         item.setSelected(True)
-                self.btn_sel_clr_sub.setText("Clear selection")
+                if not self.batch_mode:
+                    self.btn_sel_clr_sub.setText("Clear selection")
 
     def deselect_by_filter(self, string, name):
         if name == "smp":
@@ -909,7 +916,6 @@ class Ui_MainWindow(object):
                     if self.str_contains(item.text(), string):
                         item.setSelected(False)
                 self.btn_sel_clr_smp.setText("Select all")
-
         elif name == "bkg":
             if string == "":
                 self.listWidget_bkg.clearSelection()
@@ -921,7 +927,6 @@ class Ui_MainWindow(object):
                     if self.str_contains(item.text(), string):
                         item.setSelected(False)
                 self.btn_sel_clr_bkg.setText("Select all")
-
         elif name == "sub":
             if string == "":
                 self.listWidget_sub.clearSelection()
@@ -1704,7 +1709,7 @@ class Ui_MainWindow(object):
             Fit2dDic["pixelX"] = float(self.lineEdit_X.text().strip())
             Fit2dDic["pixelY"] = float(self.lineEdit_Y.text().strip())
             Fit2dDic["directDist"] = float(self.lineEdit_SD.text().strip())
-            Fit2dDic["waveLength"] = float(self.lineEdit_wavelength.text().strip()) / 10_000_000_000
+            Fit2dDic["waveLength"] = float(self.lineEdit_wavelength.text().strip())
             #Fit2dDic["energy"] = plankC * speedLightC / 1000 / \
             #    float(self.lineEdit_wavelength.text().strip()) / 10_000_000_000
             Fit2dDic["centerX"] = float(self.lineEdit_X_dir.text().strip())
