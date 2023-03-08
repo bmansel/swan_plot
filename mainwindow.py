@@ -6,6 +6,8 @@ import ctypes
 
 import sys
 
+#from threading import Thread
+#from PyQt5.QtCore import pyqtSlot, QThreadPool
 import numpy as np
 import fabio
 import os
@@ -324,7 +326,7 @@ class Ui_MainWindow(object):
         self.btn_batch.setFont(font)
 
         self.groupBox_5 = QtWidgets.QGroupBox(self.tab)
-        self.groupBox_5.setGeometry(QtCore.QRect(739, 40, 181, 161))
+        self.groupBox_5.setGeometry(QtCore.QRect(739, 0, 181, 161))
         font = QtGui.QFont()
         font.setStyleName('Microsoft Sans Serif')
         font.setBold(True)
@@ -542,9 +544,9 @@ class Ui_MainWindow(object):
         self.btn_rename.setObjectName("btn_rename")
 
         ####################################################################
-        self.groupBox_az_integration = QtWidgets.QGroupBox(self.tab_2)
+        self.groupBox_az_integration = QtWidgets.QGroupBox(self.tab)
         self.groupBox_az_integration.setGeometry(
-            QtCore.QRect(739, 140, 181, 161))
+            QtCore.QRect(739, 160, 181, 161))
         self.groupBox_az_integration.setObjectName("groupBox_az_integration")
         self.dsb_chi_start = QtWidgets.QDoubleSpinBox(
             self.groupBox_az_integration)
@@ -578,7 +580,7 @@ class Ui_MainWindow(object):
         #####################################################################
 
         #####################################################################
-        self.groupBox_rad_integration = QtWidgets.QGroupBox(self.tab_2)
+        self.groupBox_rad_integration = QtWidgets.QGroupBox(self.tab)
         self.groupBox_rad_integration.setGeometry(
             QtCore.QRect(739, 320, 181, 171))
         self.groupBox_rad_integration.setObjectName("groupBox")
@@ -659,7 +661,10 @@ class Ui_MainWindow(object):
         self.statusbar = QtWidgets.QStatusBar(MainWindow)
         self.statusbar.setObjectName("statusbar")
         MainWindow.setStatusBar(self.statusbar)
-
+        ####################################################
+        # flags
+        ####################################################
+        self.auto_mask_saturated_pixels = False
         self.monitor_002 = False
         self.mask = None
         self.bit_depth = None
@@ -689,6 +694,9 @@ class Ui_MainWindow(object):
         self.retranslateUi(MainWindow)
         if self.BL23A_mode:
             self.set_BL23A_mode()
+
+        # self.thread_manager = QtCore.QThreadPool()
+
         self.tabWidget.setCurrentIndex(2)
         self.set_enable_data_operations(False)
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
@@ -811,6 +819,7 @@ class Ui_MainWindow(object):
         self.btn_save_PONI.setText("Save params")
         self.btn_2d_integrate.setVisible(False)
         self.btn_load_PSAXS.setVisible(False)
+        self.groupBox_rot_img.setVisible(False)
 
     
     def click_batch_reduce(self):
@@ -824,6 +833,7 @@ class Ui_MainWindow(object):
 
             self.batch_mode = True
             QApplication.processEvents()
+            #self.safe_click_rem_outliers()
             self.click_rem_outliers()  # deselects and selects OLR data
             self.lbl_pbar.setText("Removed outliers...1/4")
             self.pbar.setValue(25)
@@ -1100,7 +1110,7 @@ class Ui_MainWindow(object):
                 sum_I = np.add(sum_I, item.I)
                 sum_err2 = np.add(sum_err2, np.power(item.err, 2))
         return sum_I, np.sqrt(sum_err2)
-
+    
     def onclick(self, event):
         '''
             This function has significant repeated code, the integration functions need to be made modular.
@@ -1115,6 +1125,7 @@ class Ui_MainWindow(object):
             self.ix, self.iy = event.xdata, event.ydata
             q = np.squeeze(self.ai.qFunction(self.iy, self.ix)) / 10
             chi = np.rad2deg(self.ai.chi(self.iy, self.ix))
+            #chi = self.correct_angle(chi)
             p1 = (float(self.lineEdit_X_dir.text()),
                   float(self.lineEdit_Y_dir.text()))
             p3 = (self.ix, self.iy)
@@ -1126,8 +1137,9 @@ class Ui_MainWindow(object):
             menu.addAction(f'q is: {q:.5f} A^-1')
             menu.addAction(f'chi is: {chi:.2f} deg.')
             menu.addSeparator()
-            set_angle_rot = menu.addAction('Set angle && rotate')
-            menu.addSeparator()
+            # if not self.BL23A_mode:
+            #     set_angle_rot = menu.addAction('Set angle && rotate')
+            #     menu.addSeparator()
             set_chi_min = menu.addAction('Set chi min')
             set_chi_max = menu.addAction('Set chi max')
             show_chi = menu.addAction('Show chi')
@@ -1139,10 +1151,10 @@ class Ui_MainWindow(object):
             rad_integrate = menu.addAction('get I vs chi')
             action = menu.exec_(QtGui.QCursor.pos())
 
-            if action == set_angle_rot:
-                self.dsb_rot_ang.setValue(np.rad2deg(angle + np.pi / 2))
-                self.click_rot_img()
-            elif action == set_chi_min:
+            # if action == set_angle_rot:
+            #     self.dsb_rot_ang.setValue(np.rad2deg(angle + np.pi / 2))
+            #     self.click_rot_img()
+            if action == set_chi_min:
                 self.dsb_chi_start.setValue(chi)
                 self.p1 = (self.ix, self.iy)
             elif action == set_chi_max:
@@ -1160,7 +1172,7 @@ class Ui_MainWindow(object):
                 line1, = self.ax.plot(*zip(*p1), color="lime")
                 line2, = self.ax.plot(*zip(*p2), color="lime")
                 # point, = ax.plot(*center, marker="o")
-                am1 = AngleAnnotation(center, p2[0], p1[0], text=r"$\chi$", textposition="outside",
+                am1 = AngleAnnotation(center, p1[0], p2[0], text=r"$\chi$", textposition="outside",
                                       ax=self.ax, size=75, color="lime", text_kw=dict(color="lime"))
                 self.canvas.draw()
             elif action == azi_integrate:
@@ -1285,9 +1297,14 @@ class Ui_MainWindow(object):
 
     def click_load_mask(self):
         fname, _ = QtWidgets.QFileDialog.getOpenFileName(MainWindow,
-                                                         "Select a mask file", "", " tif Image (*.tif);;edf Image (*.edf);;All Files (*)")
+                                                         "Select a mask file", "", "Fit2d mask (*.msk) ;;tif Image (*.tif);;edf Image (*.edf);;All Files (*)")
         if fname and fname != "":
             self.mask = fabio.open(fname).data
+            if fname.endswith(".msk"):
+                self.mask = np.flipud(self.mask)
+            if self.fit2d_mode:
+                self.mask = np.flipud(self.mask)
+            
 
     def mask_pix_zero(self, image):
         inv_mask = np.abs(1-self.mask)
@@ -1489,7 +1506,7 @@ class Ui_MainWindow(object):
                 'number of selected background and samples different. Returning.')
             return
 
-        if len(self.listWidget_bkg.selectedIndexes()) > 1:
+        if (len(self.listWidget_bkg.selectedIndexes()) > 1) and (self.BL23A_mode is False):
             self.show_warning_messagebox(
                 'More than one background selected, one background per sample mode.')
 
@@ -1619,6 +1636,7 @@ class Ui_MainWindow(object):
             self.canvas2.draw()
             if not self.batch_mode:
                 self.clear_lists()
+                self.tabWidget.setCurrentWidget(self.tab_2)
 
     def click_load_PONI(self):
         try:
@@ -1993,6 +2011,10 @@ class Ui_MainWindow(object):
                     break
         return path
 
+    # @QtCore.pyqtSlot()
+    # def safe_click_rem_outliers(self):
+    #     self.threadmanager.start(self.click_rem_outliers)
+    
     def click_rem_outliers(self):
 
         data_2d_all = self.get_all_selected()
@@ -2150,7 +2172,7 @@ class Ui_MainWindow(object):
         self.get_scale_max(image)
         # plot data
         # ,vmin=0,vmax=self.scale_max) #,norm="log",vmin=0,vmax=self.scale_max
-        self.ax.imshow(image, cmap="inferno", norm=colornorm)
+        self.ax.imshow(image, cmap="inferno", norm=colornorm, origin='lower')
         self.ax.set_title(title)
         # ax.set_position([0.2, 0.2, 0.6, 0.6])
         # refresh canvas
@@ -2204,7 +2226,8 @@ class Ui_MainWindow(object):
                 self.show_warning_messagebox("Image bit depth of " + str(self.bit_depth) +
                                          " found and will be used for writing and manipulating images, please be aware of bit overflow\nMax value for images is " + str(2**self.bit_depth - 1))
 
-        if self.saturated_pix_mask is False:
+        if (self.saturated_pix_mask is False) and \
+        (self.auto_mask_saturated_pixels is True):
             self.mask = make_saturated_mask(array, self.bit_depth)
             if not self.BL23A_mode:
                 self.show_warning_messagebox("Masked " + str(np.sum(self.mask)) +
@@ -2335,7 +2358,7 @@ class Ui_MainWindow(object):
                 'number of selected background and samples different. Returning.')
             return
 
-        if len(self.listWidget_bkg.selectedIndexes()) > 1:
+        if len(self.listWidget_bkg.selectedIndexes()) > 1 and (self.BL23A_mode is False):
             self.show_warning_messagebox(
                 'More than one background selected, one background per sample mode.')
 
