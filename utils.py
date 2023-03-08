@@ -2,6 +2,7 @@
 This is it
 
 '''
+import cv2
 from time import perf_counter
 import sys 
 import tomli
@@ -24,9 +25,9 @@ from pyFAI import azimuthalIntegrator
 #from matplotlib import pyplot
 from pathlib import Path
 
-from scipy import ndimage as ndi 
-from skimage.morphology import disk
-from skimage import io
+#from scipy import ndimage as ndi 
+#from skimage.morphology import disk
+#from skimage import io
 
 
 # adding below for matplotlib
@@ -439,9 +440,10 @@ class Data_2d:
         
     
     def remove_outliers(self, radius, threshold):
-        footprint_function = disk
-        footprint = footprint_function(radius=radius)
-        median_filtered = ndi.median_filter(self.array, footprint=footprint)
+        #footprint_function = disk
+        #footprint = footprint_function(radius=radius)
+        median_filtered = cv2.medianBlur(self.array, int(radius))
+        #median_filtered = ndi.median_filter(self.array, footprint=footprint)
         # Bright  and dark:
         #outliers = (image > median_filtered + threshold) | (image < median_filtered - threshold)
         # bright only
@@ -555,8 +557,9 @@ class Data_2d:
             polarization_factor=None, 
             dark=None, 
             flat=None, 
+            method=("no", "csr", "cython"),
             #method=("no", "csr", "cython"), #'cython'
-            method=("no", "histogram", "cython"),
+            #method=("no", "histogram", "cython"),
             unit='q_A^-1', 
             safe=False, 
             normalization_factor=normValue, 

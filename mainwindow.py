@@ -3,7 +3,6 @@
 from utils import *
 
 import ctypes
-
 import sys
 
 #from threading import Thread
@@ -365,9 +364,16 @@ class Ui_MainWindow(object):
         font.setWeight(50)
         self.label.setFont(font)
         self.label.setObjectName("label")
-        self.lineEdit_radius = QtWidgets.QLineEdit(self.groupBox_5)
-        self.lineEdit_radius.setGeometry(QtCore.QRect(10, 50, 113, 25))
-        self.lineEdit_radius.setObjectName("lineEdit_radius")
+        # self.lineEdit_radius = QtWidgets.QLineEdit(self.groupBox_5)
+        # self.lineEdit_radius.setGeometry(QtCore.QRect(10, 50, 113, 25))
+        # self.lineEdit_radius.setObjectName("lineEdit_radius")
+        self.comboBox_size = QtWidgets.QComboBox(self.groupBox_5)
+        self.comboBox_size.setGeometry(QtCore.QRect(10, 50, 113, 25))
+        self.comboBox_size.setObjectName("comboBox_size")
+        self.comboBox_size.addItem("3")
+        self.comboBox_size.addItem("5")
+        self.comboBox_size.setCurrentIndex(1)
+        
         self.lineEdit_threshold = QtWidgets.QLineEdit(self.groupBox_5)
         self.lineEdit_threshold.setGeometry(QtCore.QRect(10, 100, 113, 25))
         self.lineEdit_threshold.setObjectName("lineEdit_threshold")
@@ -731,8 +737,8 @@ class Ui_MainWindow(object):
         self.lbl_pbar.setText(_translate("MainWindow", "Progress:"))
         # self.btn_get_rot_ang.setText(_translate("MainWindow", "Get angle"))
         self.btn_rot_img.setText(_translate("MainWindow", "Apply"))
-        self.label.setText(_translate("MainWindow", "Radius:"))
-        self.lineEdit_radius.setText(_translate("MainWindow", "2.0"))
+        self.label.setText(_translate("MainWindow", "Size (pix):"))
+        #self.lineEdit_radius.setText(_translate("MainWindow", "2.0"))
         self.lineEdit_threshold.setText(_translate("MainWindow", "50"))
         self.label_2.setText(_translate("MainWindow", "Threshold:"))
         self.btn_remove_outliers.setText(
@@ -821,9 +827,17 @@ class Ui_MainWindow(object):
         self.btn_load_PSAXS.setVisible(False)
         self.groupBox_rot_img.setVisible(False)
 
-    
+    def check_batch_input(self):
+        if len(self.listWidget_bkg.selectedIndexes()) > 1:
+            self.show_warning_messagebox(
+                'More than one background selected, only one background can be selected to subtract off.')
+            return False
+        
+
     def click_batch_reduce(self):
         try:
+            if self.check_batch_input() == False:
+                return
             # set batch mode
             self.groupBox.setEnabled(False)
             self.lbl_pbar.setVisible(True)
@@ -1412,6 +1426,8 @@ class Ui_MainWindow(object):
         self.clear_lists()
 
     def click_integrate_radial(self):
+        del self.ai
+        _ = self.get_ai()
         if self.ai is None:
             self.no_ai_found_error()
         else:
@@ -1473,6 +1489,8 @@ class Ui_MainWindow(object):
         return chi, I
 
     def click_integrate_2D(self):
+        del self.ai
+        _ = self.get_ai()
         if self.ai is None:
             self.no_ai_found_error()
         else:
@@ -1506,9 +1524,10 @@ class Ui_MainWindow(object):
                 'number of selected background and samples different. Returning.')
             return
 
-        if (len(self.listWidget_bkg.selectedIndexes()) > 1) and (self.BL23A_mode is False):
+        if (len(self.listWidget_bkg.selectedIndexes()) > 1):
             self.show_warning_messagebox(
-                'More than one background selected, one background per sample mode.')
+                'More than one background selected, only one background can be used at a time.')
+            return
 
         for item in self.get_all_selected():  # check that all selected are 1D data
             if not isinstance(item, Data_1d):
@@ -1519,63 +1538,63 @@ class Ui_MainWindow(object):
         # except:
         #    self.show_warning_messagebox("No background selected.")
         #    return
-        if len(self.listWidget_bkg.selectedIndexes()) == 1:
-            bkg_name = self.listWidget_bkg.selectedIndexes()[0].data()
-            bkg_data = self.background_data[bkg_name].I
-            bkg_err = self.background_data[bkg_name].err
+        # if len(self.listWidget_bkg.selectedIndexes()) == 1:
+        bkg_name = self.listWidget_bkg.selectedIndexes()[0].data()
+        bkg_data = self.background_data[bkg_name].I
+        bkg_err = self.background_data[bkg_name].err
 
-            for index in self.listWidget_smp.selectedIndexes():
-                part1 = np.divide(self.sample_data[index.data()].I, float(
-                    self.lineEdit_smp_TM.text()))
-                part2 = np.divide(bkg_data, float(self.lineEdit_bkg_TM.text()))
-                errP1 = np.divide(self.sample_data[index.data()].err, float(
-                    self.lineEdit_smp_TM.text()))
-                errP2 = np.divide(bkg_err, float(self.lineEdit_bkg_TM.text()))
+        for index in self.listWidget_smp.selectedIndexes():
+            part1 = np.divide(self.sample_data[index.data()].I, float(
+                self.lineEdit_smp_TM.text()))
+            part2 = np.divide(bkg_data, float(self.lineEdit_bkg_TM.text()))
+            errP1 = np.divide(self.sample_data[index.data()].err, float(
+                self.lineEdit_smp_TM.text()))
+            errP2 = np.divide(bkg_err, float(self.lineEdit_bkg_TM.text()))
 
-                name = self.sample_data[index.data()].name
-                name = "1D~" + "subd_" + name.split("~")[1]
-                name = append_name(name, self.processed_data)
-                out = Data_1d(
-                    self.sample_data[index.data()].dir,
-                    "dat",
-                    name,
-                    self.sample_data[index.data()].q,
-                    np.subtract(part1, part2),
-                    np.sqrt(np.add(np.power(errP1, 2), np.power(errP2, 2))),
-                    {"type": "sub", "dim": "1D"}
-                )
+            name = self.sample_data[index.data()].name
+            name = "1D~" + "subd_" + name.split("~")[1]
+            name = append_name(name, self.processed_data)
+            out = Data_1d(
+                self.sample_data[index.data()].dir,
+                "dat",
+                name,
+                self.sample_data[index.data()].q,
+                np.subtract(part1, part2),
+                np.sqrt(np.add(np.power(errP1, 2), np.power(errP2, 2))),
+                {"type": "sub", "dim": "1D"}
+            )
 
-                self.processed_data[out.name] = out
-                self.listWidget_sub.addItem(out.name)
+            self.processed_data[out.name] = out
+            self.listWidget_sub.addItem(out.name)
 
-        else:
-            for count, index in enumerate(self.listWidget_smp.selectedIndexes()):
+        # else:
+        #     for count, index in enumerate(self.listWidget_smp.selectedIndexes()):
 
-                bkg_name = self.listWidget_bkg.selectedIndexes()[count].data()
-                bkg_data = self.background_data[bkg_name].I
-                bkg_err = self.background_data[bkg_name].err
-                part1 = np.divide(self.sample_data[index.data()].I, float(
-                    self.lineEdit_smp_TM.text()))
-                part2 = np.divide(bkg_data, float(self.lineEdit_bkg_TM.text()))
-                errP1 = np.divide(self.sample_data[index.data()].err, float(
-                    self.lineEdit_smp_TM.text()))
-                errP2 = np.divide(bkg_err, float(self.lineEdit_bkg_TM.text()))
+        #         bkg_name = self.listWidget_bkg.selectedIndexes()[count].data()
+        #         bkg_data = self.background_data[bkg_name].I
+        #         bkg_err = self.background_data[bkg_name].err
+        #         part1 = np.divide(self.sample_data[index.data()].I, float(
+        #             self.lineEdit_smp_TM.text()))
+        #         part2 = np.divide(bkg_data, float(self.lineEdit_bkg_TM.text()))
+        #         errP1 = np.divide(self.sample_data[index.data()].err, float(
+        #             self.lineEdit_smp_TM.text()))
+        #         errP2 = np.divide(bkg_err, float(self.lineEdit_bkg_TM.text()))
 
-                name = self.sample_data[index.data()].name
-                name = "1D~" + "subd_" + name.split("~")[1]
-                name = append_name(name, self.processed_data)
-                out = Data_1d(
-                    self.sample_data[index.data()].dir,
-                    "dat",
-                    name,
-                    self.sample_data[index.data()].q,
-                    np.subtract(part1, part2),
-                    np.sqrt(np.add(np.power(errP1, 2), np.power(errP2, 2))),
-                    {"type": "sub", "dim": "1D"}
-                )
+        #         name = self.sample_data[index.data()].name
+        #         name = "1D~" + "subd_" + name.split("~")[1]
+        #         name = append_name(name, self.processed_data)
+        #         out = Data_1d(
+        #             self.sample_data[index.data()].dir,
+        #             "dat",
+        #             name,
+        #             self.sample_data[index.data()].q,
+        #             np.subtract(part1, part2),
+        #             np.sqrt(np.add(np.power(errP1, 2), np.power(errP2, 2))),
+        #             {"type": "sub", "dim": "1D"}
+        #         )
 
-                self.processed_data[out.name] = out
-                self.listWidget_sub.addItem(out.name)
+        #         self.processed_data[out.name] = out
+        #         self.listWidget_sub.addItem(out.name)
         self.tabWidget.setCurrentWidget(self.tab_2)
         self.clear_lists()
 
@@ -1584,6 +1603,8 @@ class Ui_MainWindow(object):
             "Scattering geometry information is not found, input a .poni file or information from fit 2d", title="Error")
 
     def click_integrate(self):
+        del self.ai
+        _ = self.get_ai()
         if self.ai is None:
             self.no_ai_found_error()
         else:
@@ -1647,18 +1668,8 @@ class Ui_MainWindow(object):
                     with open(fname, "rb") as f:
                         Fit2dDic = tomli.load(f)
                     print(Fit2dDic)
-                    self.ai = azimuthalIntegrator.AzimuthalIntegrator(wavelength=Fit2dDic["waveLength"] / 10_000_000_000)
-
-                    self.ai.setFit2D(
-                        Fit2dDic["directDist"],
-                        Fit2dDic["centerX"],
-                        Fit2dDic["centerY"],    # 2352 -
-                        Fit2dDic["tilt"],
-                        Fit2dDic["tiltPlanRotation"],
-                        Fit2dDic["pixelX"],
-                        Fit2dDic["pixelY"]
-                    )
                     self.fill_param_settings(Fit2dDic)
+                    _ = self.get_ai()
                     self.disable_params_input()
                     self.set_enable_data_operations(True)
             else:
@@ -1684,7 +1695,7 @@ class Ui_MainWindow(object):
         # .text(Fit2dDic["directDist"])
         self.lineEdit_SD.setText(str(Fit2dDic["directDist"])[0:12])
         self.lineEdit_wavelength.setText(
-            str(10_000_000_000 * self.ai.get_wavelength())[0:12])
+            str(Fit2dDic["waveLength"])[0:12])
         self.lineEdit_X_dir.setText(str(Fit2dDic["centerX"])[0:12])
         # invert Y below ###############################################
         self.lineEdit_Y_dir.setText(
@@ -1706,37 +1717,41 @@ class Ui_MainWindow(object):
         self.btn_load_PONI.setDisabled(True)
         self.btn_save_PONI.setDisabled(True)
     
-    
+    def get_ai(self):
+        Fit2dDic = {}
+        Fit2dDic["pixelX"] = float(self.lineEdit_X.text().strip())
+        Fit2dDic["pixelY"] = float(self.lineEdit_Y.text().strip())
+        Fit2dDic["directDist"] = float(self.lineEdit_SD.text().strip())
+        Fit2dDic["waveLength"] = float(self.lineEdit_wavelength.text().strip())
+        #Fit2dDic["energy"] = plankC * speedLightC / 1000 / \
+        #    float(self.lineEdit_wavelength.text().strip()) / 10_000_000_000
+        Fit2dDic["centerX"] = float(self.lineEdit_X_dir.text().strip())
+        Fit2dDic["centerY"] = float(self.lineEdit_Y_dir.text().strip())
+        Fit2dDic["tiltPlanRotation"] = float(
+            self.lineEdit_rotAngTiltPlane.text().strip())
+        Fit2dDic["tilt"] = float(self.lineEdit_angDetTilt.text().strip())
+
+        self.ai = azimuthalIntegrator.AzimuthalIntegrator(wavelength=float(
+            self.lineEdit_wavelength.text().strip()) / 10_000_000_000)
+
+        self.ai.setFit2D(
+            Fit2dDic["directDist"],
+            Fit2dDic["centerX"],
+            Fit2dDic["centerY"],    # 2352 -
+            Fit2dDic["tilt"],
+            Fit2dDic["tiltPlanRotation"],
+            Fit2dDic["pixelX"],
+            Fit2dDic["pixelY"]
+        )
+        return Fit2dDic
+
+
     def click_save_PONI(self):
 
         plankC = float(4.135667696e-15)
         speedLightC = float(299_792_458)
         try:
-            Fit2dDic = {}
-            Fit2dDic["pixelX"] = float(self.lineEdit_X.text().strip())
-            Fit2dDic["pixelY"] = float(self.lineEdit_Y.text().strip())
-            Fit2dDic["directDist"] = float(self.lineEdit_SD.text().strip())
-            Fit2dDic["waveLength"] = float(self.lineEdit_wavelength.text().strip())
-            #Fit2dDic["energy"] = plankC * speedLightC / 1000 / \
-            #    float(self.lineEdit_wavelength.text().strip()) / 10_000_000_000
-            Fit2dDic["centerX"] = float(self.lineEdit_X_dir.text().strip())
-            Fit2dDic["centerY"] = float(self.lineEdit_Y_dir.text().strip())
-            Fit2dDic["tiltPlanRotation"] = float(
-                self.lineEdit_rotAngTiltPlane.text().strip())
-            Fit2dDic["tilt"] = float(self.lineEdit_angDetTilt.text().strip())
-
-            self.ai = azimuthalIntegrator.AzimuthalIntegrator(wavelength=float(
-                self.lineEdit_wavelength.text().strip()) / 10_000_000_000)
-
-            self.ai.setFit2D(
-                Fit2dDic["directDist"],
-                Fit2dDic["centerX"],
-                Fit2dDic["centerY"],    # 2352 -
-                Fit2dDic["tilt"],
-                Fit2dDic["tiltPlanRotation"],
-                Fit2dDic["pixelX"],
-                Fit2dDic["pixelY"]
-            )
+            Fit2dDic = self.get_ai()
 
             if self.BL23A_mode:
                 fname, _ = QtWidgets.QFileDialog.getSaveFileName(
@@ -2027,10 +2042,14 @@ class Ui_MainWindow(object):
             self.show_warning_messagebox("No 2d data selected.")
 
         for data_2d in data_2d_all:
-            im_corr = data_2d.remove_outliers(
-                float(self.lineEdit_radius.text()),
-                float(self.lineEdit_threshold.text())
-            )
+            if self.comboBox_size.currentText() == "3":
+                size = int(3)
+            elif self.comboBox_size.currentText() == "5":
+                size = int(5)
+            elif self.comboBox_size.currentText() == "7":
+                size = int(7)
+
+            im_corr = data_2d.remove_outliers(size, float(self.lineEdit_threshold.text()))
 
             corr_data = {'dir': data_2d.dir, 'ext': data_2d.ext, 'name': "2D~" +
                          "OLrm_" + data_2d.name.split("~")[1], 'array': im_corr}
@@ -2047,8 +2066,8 @@ class Ui_MainWindow(object):
             if self.batch_mode:
                 self.deselect_by_filter(data_2d.name, data_2d.info["type"])
                 self.select_by_filter(corr_data['name'], data_2d.info["type"])
-
-        self.plot_2D(im_corr, "2D~" + "OLrm_" + data_2d.name.split("~")[1])
+        if not self.batch_mode:
+            self.plot_2D(im_corr, "2D~" + "OLrm_" + data_2d.name.split("~")[1])
 
         if not self.batch_mode:
             self.clear_lists()
@@ -2358,115 +2377,120 @@ class Ui_MainWindow(object):
                 'number of selected background and samples different. Returning.')
             return
 
-        if len(self.listWidget_bkg.selectedIndexes()) > 1 and (self.BL23A_mode is False):
+        if len(self.listWidget_bkg.selectedIndexes()) > 1:
             self.show_warning_messagebox(
-                'More than one background selected, one background per sample mode.')
+                'More than one background selected, only one background can be selected to subtract off.')
+            return
 
         # except:
         #    self.show_warning_messagebox("No background selected.")
         #    return
-        if len(self.listWidget_bkg.selectedIndexes()) == 1:
-            bkg_name = self.listWidget_bkg.selectedIndexes()[0].data()
-            bkg_data = self.background_data[bkg_name].array
+        # if len(self.listWidget_bkg.selectedIndexes()) == 1:
+        bkg_name = self.listWidget_bkg.selectedIndexes()[0].data()
+        bkg_data = self.background_data[bkg_name].array
 
+        if self.mask is not None:
+            bkg_data = self.mask_pix_zero(bkg_data)
+
+        for index in self.listWidget_smp.selectedIndexes():
+            out = {}
+            # out['path'] = os.path.join(self.sample_data[index.data()].dir,  "subd_" + self.sample_data[index.data()].name)
+            out['dir'] = self.sample_data[index.data()].dir
+            out['ext'] = self.sample_data[index.data()].ext
+            name = self.sample_data[index.data()].name
+            out['name'] = name.split(
+                "~")[0] + "~" + "subd_" + name.split("~")[1]
+            out['name'] = append_name(
+                out['name'], self.processed_data)  # add one if exists
+            out['info'] = {"type": "sub"}
             if self.mask is not None:
-                bkg_data = self.mask_pix_zero(bkg_data)
+                smp_data = self.mask_pix_zero(
+                    self.sample_data[index.data()].array)
+            else:
+                smp_data = self.sample_data[index.data()].array
 
-            for index in self.listWidget_smp.selectedIndexes():
-                out = {}
-                # out['path'] = os.path.join(self.sample_data[index.data()].dir,  "subd_" + self.sample_data[index.data()].name)
-                out['dir'] = self.sample_data[index.data()].dir
-                out['ext'] = self.sample_data[index.data()].ext
-                name = self.sample_data[index.data()].name
-                out['name'] = name.split(
-                    "~")[0] + "~" + "subd_" + name.split("~")[1]
-                out['name'] = append_name(
-                    out['name'], self.processed_data)  # add one if exists
-                out['info'] = {"type": "sub"}
-                if self.mask is not None:
-                    smp_data = self.mask_pix_zero(
-                        self.sample_data[index.data()].array)
-                else:
-                    smp_data = self.sample_data[index.data()].array
+            scale_factor = 1
 
-                scale_factor = 1
+            # if self.monitor_002:
+            #     civi_smp = self.sample_data[index.data()].info['civi']
+            #     civi_bkg = self.background_data[bkg_name].info['civi']
+            # else:
+            civi_smp = 1
+            civi_bkg = 1
 
-                # if self.monitor_002:
-                #     civi_smp = self.sample_data[index.data()].info['civi']
-                #     civi_bkg = self.background_data[bkg_name].info['civi']
-                # else:
-                civi_smp = 1
-                civi_bkg = 1
+            part1 = np.divide(smp_data * scale_factor,
+                                float(self.lineEdit_smp_TM.text()) * civi_smp)
+            part2 = np.divide(bkg_data * scale_factor,
+                                float(self.lineEdit_bkg_TM.text()) * civi_bkg)
+            out['array'] = np.subtract(part1, part2)
+            self.processed_data[out["name"]] = Data_2d(
+                out['dir'],
+                out['ext'],
+                out['name'],
+                out['array'],
+                out['info']
+            )
+            # self.processed_data[out["name"]].info = {"type": "sub","dim": "2D"} # add data type, this is not easy to read
+            self.listWidget_sub.addItem(out["name"])
+            if self.batch_mode:
+                # select processed item
+                self.select_by_filter(out["name"], "sub")
 
-                part1 = np.divide(smp_data * scale_factor,
-                                  float(self.lineEdit_smp_TM.text()) * civi_smp)
-                part2 = np.divide(bkg_data * scale_factor,
-                                  float(self.lineEdit_bkg_TM.text()) * civi_bkg)
-                out['array'] = np.subtract(part1, part2)
-                self.processed_data[out["name"]] = Data_2d(
-                    out['dir'],
-                    out['ext'],
-                    out['name'],
-                    out['array'],
-                    out['info']
-                )
-                # self.processed_data[out["name"]].info = {"type": "sub","dim": "2D"} # add data type, this is not easy to read
-                self.listWidget_sub.addItem(out["name"])
-                if self.batch_mode:
-                    # select processed item
-                    self.select_by_filter(out["name"], "sub")
-
-            # plot data
+        # plot data
+        if not self.batch_mode:
             self.set_plot_image_name(out['name'], out['info']['type'])
             self.plot_2D(
-                self.processed_data[out["name"]].array, out['name'])
-        else:
-            for count, index in enumerate(self.listWidget_smp.selectedIndexes()):
-                bkg_name = self.listWidget_bkg.selectedIndexes()[count].data()
-                bkg_data = self.background_data[bkg_name].array
-                if self.mask is not None:
-                    bkg_data = self.mask_pix_zero(bkg_data)
+            self.processed_data[out["name"]].array, out['name'])
+        
+        # else:
+        #     self.show_warning_messagebox("Can only subtract a single background from multiple samples.")
+            # for count, index in enumerate(self.listWidget_smp.selectedIndexes()):
+            #     bkg_name = self.listWidget_bkg.selectedIndexes()[count].data()
+            #     bkg_data = self.background_data[bkg_name].array
+            #     if self.mask is not None:
+            #         bkg_data = self.mask_pix_zero(bkg_data)
 
-                #bkg_data = self.background_data[bkg_name].array
-                out = {}
-                # out['path'] = os.path.join(self.sample_data[index.data()].dir,  "subd_" + self.sample_data[index.data()].name)
-                out['dir'] = self.sample_data[index.data()].dir
-                out['ext'] = self.sample_data[index.data()].ext
-                name = self.sample_data[index.data()].name
-                out['name'] = name.split(
-                    "~")[0] + "~" + "subd_" + name.split("~")[1]
-                out['name'] = append_name(
-                    out['name'], self.processed_data)  # add one if exists
-                out['info'] = {"type": "sub"}
-                if self.mask is not None:
-                    smp_data = self.mask_pix_zero(
-                        self.sample_data[index.data()].array)
-                else:
-                    smp_data = self.sample_data[index.data()].array
+            #     #bkg_data = self.background_data[bkg_name].array
+            #     out = {}
+            #     # out['path'] = os.path.join(self.sample_data[index.data()].dir,  "subd_" + self.sample_data[index.data()].name)
+            #     out['dir'] = self.sample_data[index.data()].dir
+            #     out['ext'] = self.sample_data[index.data()].ext
+            #     name = self.sample_data[index.data()].name
+            #     out['name'] = name.split(
+            #         "~")[0] + "~" + "subd_" + name.split("~")[1]
+            #     out['name'] = append_name(
+            #         out['name'], self.processed_data)  # add one if exists
+            #     out['info'] = {"type": "sub"}
+            #     if self.mask is not None:
+            #         smp_data = self.mask_pix_zero(
+            #             self.sample_data[index.data()].array)
+            #     else:
+            #         smp_data = self.sample_data[index.data()].array
 
-                part1 = np.divide(smp_data, float(self.lineEdit_smp_TM.text()))
-                part2 = np.divide(bkg_data, float(self.lineEdit_bkg_TM.text()))
-                out['array'] = np.subtract(part1, part2)
-                self.processed_data[out["name"]] = Data_2d(
-                    out['dir'],
-                    out['ext'],
-                    out['name'],
-                    out['array'],
-                    out['info']
-                )
-                # add data type, this is not easy to read
-                self.processed_data[out["name"]].info = {
-                    "type": "sub", "dim": "2D"}
-                self.listWidget_sub.addItem(out["name"])
+            #     part1 = np.divide(smp_data, float(self.lineEdit_smp_TM.text()))
+            #     part2 = np.divide(bkg_data, float(self.lineEdit_bkg_TM.text()))
+            #     out['array'] = np.subtract(part1, part2)
+            #     self.processed_data[out["name"]] = Data_2d(
+            #         out['dir'],
+            #         out['ext'],
+            #         out['name'],
+            #         out['array'],
+            #         out['info']
+            #     )
+            #     # add data type, this is not easy to read
+            #     self.processed_data[out["name"]].info = {
+            #         "type": "sub", "dim": "2D"}
+            #     self.listWidget_sub.addItem(out["name"])
 
-                if self.batch_mode:
-                    # select processed item
-                    self.select_by_filter(out["name"], "sub")
+            #     if self.batch_mode:
+            #         # select processed item
+            #         self.select_by_filter(out["name"], "sub")
 
-            # plot data
-            self.set_plot_image_name(out['name'], out['info']['type'])
-            self.plot_2D(
-                self.processed_data[out["name"]].array, out['name'])  # here
+            # # plot data
+            # if not self.batch_mode:
+            #     self.set_plot_image_name(out['name'], out['info']['type'])
+            #     self.plot_2D(
+            #         self.processed_data[out["name"]].array, out['name'])  # here
 
         # except:
         #    self.show_warning_messagebox("2d images not compatible.")
