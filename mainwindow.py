@@ -835,46 +835,46 @@ class Ui_MainWindow(object):
         
 
     def click_batch_reduce(self):
-        #try:
-        if self.check_batch_input() == False:
-            return
-        # set batch mode
-        self.groupBox.setEnabled(False)
-        self.lbl_pbar.setVisible(True)
-        self.pbar.setVisible(True)
-        self.lbl_pbar.setText("Batch processing...")
-        self.pbar.setValue(0)
+        try:
+            if self.check_batch_input() == False:
+                return
+            # set batch mode
+            self.groupBox.setEnabled(False)
+            self.lbl_pbar.setVisible(True)
+            self.pbar.setVisible(True)
+            self.lbl_pbar.setText("Batch processing...")
+            self.pbar.setValue(0)
 
-        self.batch_mode = True
-        QApplication.processEvents()
-        #self.safe_click_rem_outliers()
-        self.click_rem_outliers()  # deselects and selects OLR data
-        self.lbl_pbar.setText("Removed outliers...1/4")
-        self.pbar.setValue(25)
-        QApplication.processEvents()
-        self.click_subtract()
-        self.lbl_pbar.setText("Subtracted...2/4")
-        self.pbar.setValue(50)
-        QApplication.processEvents()
-        self.tabWidget.setCurrentIndex(1)
-        QApplication.processEvents()
-        self.click_integrate()
-        self.lbl_pbar.setText("Integrated...3/4")
-        self.pbar.setValue(75)
-        QApplication.processEvents()
-        self.get_first_sel() # is this needed?
-        self.click_export()
-        self.lbl_pbar.setText("Exported all subtracted...4/4")
-        self.pbar.setValue(100)
-        self.batch_mode = False
-        self.groupBox.setEnabled(True)
-        self.listWidget_sub.clearSelection()
-        #except:
-            # self.show_warning_messagebox("Batch processing failed, \
-            # check that sample and background data are selected. \
-            # Or that the geometry is set correctly.")
-            # self.batch_mode = False
-            # self.groupBox.setEnabled(True)
+            self.batch_mode = True
+            QApplication.processEvents()
+            #self.safe_click_rem_outliers()
+            self.click_rem_outliers()  # deselects and selects OLR data
+            self.lbl_pbar.setText("Removed outliers...1/4")
+            self.pbar.setValue(25)
+            QApplication.processEvents()
+            self.click_subtract()
+            self.lbl_pbar.setText("Subtracted...2/4")
+            self.pbar.setValue(50)
+            QApplication.processEvents()
+            self.tabWidget.setCurrentIndex(1)
+            QApplication.processEvents()
+            self.click_integrate()
+            self.lbl_pbar.setText("Integrated...3/4")
+            self.pbar.setValue(75)
+            QApplication.processEvents()
+            self.get_first_sel() # is this needed?
+            self.click_export()
+            self.lbl_pbar.setText("Exported all subtracted...4/4")
+            self.pbar.setValue(100)
+            self.batch_mode = False
+            self.groupBox.setEnabled(True)
+            self.listWidget_sub.clearSelection()
+        except:
+            self.show_warning_messagebox("Batch processing failed, \
+            check that sample and background data are selected. \
+            Or that the geometry is set correctly.")
+            self.batch_mode = False
+            self.groupBox.setEnabled(True)
        
     
     def toggle_select_by_string(self, string, name, state):
