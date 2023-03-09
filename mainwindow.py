@@ -835,47 +835,68 @@ class Ui_MainWindow(object):
         
 
     def click_batch_reduce(self):
-        try:
-            if self.check_batch_input() == False:
-                return
-            # set batch mode
-            self.groupBox.setEnabled(False)
-            self.lbl_pbar.setVisible(True)
-            self.pbar.setVisible(True)
-            self.lbl_pbar.setText("Batch processing...")
-            self.pbar.setValue(0)
+        #try:
+        if self.check_batch_input() == False:
+            return
+        # set batch mode
+        self.groupBox.setEnabled(False)
+        self.lbl_pbar.setVisible(True)
+        self.pbar.setVisible(True)
+        self.lbl_pbar.setText("Batch processing...")
+        self.pbar.setValue(0)
 
-            self.batch_mode = True
-            QApplication.processEvents()
-            #self.safe_click_rem_outliers()
-            self.click_rem_outliers()  # deselects and selects OLR data
-            self.lbl_pbar.setText("Removed outliers...1/4")
-            self.pbar.setValue(25)
-            QApplication.processEvents()
-            self.click_subtract()
-            self.lbl_pbar.setText("Subtracted...2/4")
-            self.pbar.setValue(50)
-            QApplication.processEvents()
-            self.tabWidget.setCurrentIndex(1)
-            QApplication.processEvents()
-            self.click_integrate()
-            self.lbl_pbar.setText("Integrated...3/4")
-            self.pbar.setValue(75)
-            QApplication.processEvents()
-            self.get_first_sel()
-            self.click_export()
-            self.lbl_pbar.setText("Exported all subtracted...4/4")
-            self.pbar.setValue(100)
-            self.batch_mode = False
-            self.groupBox.setEnabled(True)
-            self.listWidget_sub.clearSelection()
-        except:
-            self.show_warning_messagebox("Batch processing failed, \
-            check that sample and background data are selected. \
-            Or that the geometry is set correctly.")
-            self.batch_mode = False
-            self.groupBox.setEnabled(True)
-
+        self.batch_mode = True
+        QApplication.processEvents()
+        #self.safe_click_rem_outliers()
+        self.click_rem_outliers()  # deselects and selects OLR data
+        self.lbl_pbar.setText("Removed outliers...1/4")
+        self.pbar.setValue(25)
+        QApplication.processEvents()
+        self.click_subtract()
+        self.lbl_pbar.setText("Subtracted...2/4")
+        self.pbar.setValue(50)
+        QApplication.processEvents()
+        self.tabWidget.setCurrentIndex(1)
+        QApplication.processEvents()
+        self.click_integrate()
+        self.lbl_pbar.setText("Integrated...3/4")
+        self.pbar.setValue(75)
+        QApplication.processEvents()
+        self.get_first_sel() # is this needed?
+        self.click_export()
+        self.lbl_pbar.setText("Exported all subtracted...4/4")
+        self.pbar.setValue(100)
+        self.batch_mode = False
+        self.groupBox.setEnabled(True)
+        self.listWidget_sub.clearSelection()
+        #except:
+            # self.show_warning_messagebox("Batch processing failed, \
+            # check that sample and background data are selected. \
+            # Or that the geometry is set correctly.")
+            # self.batch_mode = False
+            # self.groupBox.setEnabled(True)
+       
+    
+    def toggle_select_by_string(self, string, name, state):
+        if name == "smp":
+            items = [self.listWidget_smp.item(
+                x) for x in range(self.listWidget_smp.count())]
+            for item in items:
+                if string == item.text():
+                    item.setSelected(state)
+        elif name == "bkg":
+            items = [self.listWidget_bkg.item(
+                x) for x in range(self.listWidget_bkg.count())]
+            for item in items:
+                if string == item.text():
+                    item.setSelected(state)
+        elif name == "sub":
+            items = [self.listWidget_sub.item(
+                x) for x in range(self.listWidget_sub.count())]
+            for item in items:
+                if string == item.text():
+                    item.setSelected(state)
+    
     def select_by_filter(self, string, name):
         if name == "smp":
             if string == "":
@@ -1644,7 +1665,7 @@ class Ui_MainWindow(object):
                         {"type": data.info["type"]}
                     )
                     self.append_data(new_data, new_data.info['type'])
-
+                    #if not self.batch_mode:
                     self.plot_1D_1D_data(
                         ax2,
                         new_data.q,
@@ -1653,7 +1674,9 @@ class Ui_MainWindow(object):
                         new_data.name.split("~")[1]
                     )
                     if self.batch_mode:
-                        self.select_by_filter(new_data.name, "sub")
+                        self.toggle_select_by_string(new_data.name, "sub",True)
+                        QApplication.processEvents()
+                        
             self.canvas2.draw()
             if not self.batch_mode:
                 self.clear_lists()
@@ -2064,8 +2087,9 @@ class Ui_MainWindow(object):
                 data_2d.info["type"]
             )
             if self.batch_mode:
-                self.deselect_by_filter(data_2d.name, data_2d.info["type"])
-                self.select_by_filter(corr_data['name'], data_2d.info["type"])
+                self.toggle_select_by_string(data_2d.name, data_2d.info["type"], False)
+                self.toggle_select_by_string(corr_data['name'], data_2d.info["type"], True)
+                QApplication.processEvents()
         if not self.batch_mode:
             self.plot_2D(im_corr, "2D~" + "OLrm_" + data_2d.name.split("~")[1])
 
@@ -2433,8 +2457,9 @@ class Ui_MainWindow(object):
             # self.processed_data[out["name"]].info = {"type": "sub","dim": "2D"} # add data type, this is not easy to read
             self.listWidget_sub.addItem(out["name"])
             if self.batch_mode:
-                # select processed item
-                self.select_by_filter(out["name"], "sub")
+                self.toggle_select_by_string(out["name"], "sub", True)
+                QApplication.processEvents()
+                #self.select_by_filter(out["name"], "sub")
 
         # plot data
         if not self.batch_mode:
