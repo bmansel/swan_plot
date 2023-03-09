@@ -18,7 +18,17 @@ from matplotlib import pyplot
 from pathlib import Path
 
 # adding below for matplotlib
-from PyQt5.QtWidgets import QDialog, QApplication, QPushButton, QVBoxLayout, QInputDialog, QMenu, QAction
+from PyQt5.QtWidgets import (
+    QWidget,
+    QDialog, 
+    QApplication,
+    QPushButton, 
+    QVBoxLayout, 
+    QInputDialog, 
+    QMenu, 
+    QAction,
+    QMainWindow
+)
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 #import matplotlib.pyplot as plt
@@ -26,19 +36,23 @@ from matplotlib.colors import SymLogNorm
 import random
 
 
-class Ui_MainWindow(object):
-    def setupUi(self, MainWindow):
-        MainWindow.setObjectName("MainWindow")
-        MainWindow.resize(1000, 900)
+class Window(QMainWindow):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setupUi()
+    
+    def setupUi(self):
+        self.setObjectName("MainWindow")
+        self.resize(1000, 900)
         #####################################################################
         # not needed on linux etc
         #myappid = u'LFP_reduction'
         #ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
         #####################################################################
-        MainWindow.setWindowIcon(QtGui.QIcon('../images/icon.png'))
-        self.centralwidget = QtWidgets.QWidget(MainWindow)
-        self.centralwidget.setObjectName("centralwidget")
-        self.grpBx_TM = QtWidgets.QGroupBox(self.centralwidget)
+        self.setWindowIcon(QtGui.QIcon('../images/icon.png'))
+        self.centralWidget = QWidget()
+        self.setCentralWidget(self.centralWidget)
+        self.grpBx_TM = QtWidgets.QGroupBox(self.centralWidget)
         self.grpBx_TM.setGeometry(QtCore.QRect(20, 20, 541, 71))
         font = QtGui.QFont()
         font.setStyleName('Microsoft Sans Serif')
@@ -90,16 +104,16 @@ class Ui_MainWindow(object):
         self.lbl_smp_TM.setObjectName("lbl_smp_TM")
         self.gridLayout.addWidget(self.lbl_smp_TM, 0, 0, 1, 1)
 
-        self.lbl_pbar = QtWidgets.QLabel(self.centralwidget)
+        self.lbl_pbar = QtWidgets.QLabel(self.centralWidget)
         self.lbl_pbar.setFont(font)
         self.lbl_pbar.setObjectName("lbl_pbar")
         self.lbl_pbar.setGeometry(QtCore.QRect(600, 50, 300, 23))
         self.lbl_pbar.setVisible(False)
-        self.pbar = QtWidgets.QProgressBar(self.centralwidget)
+        self.pbar = QtWidgets.QProgressBar(self.centralWidget)
         self.pbar.setGeometry(QtCore.QRect(600, 70, 300, 23))
         self.pbar.setVisible(False)
 
-        self.groupBox = QtWidgets.QGroupBox(self.centralwidget)
+        self.groupBox = QtWidgets.QGroupBox(self.centralWidget)
         self.groupBox.setGeometry(QtCore.QRect(20, 100, 951, 771))
         font = QtGui.QFont()
         font.setStyleName('Microsoft Sans Serif')
@@ -167,8 +181,6 @@ class Ui_MainWindow(object):
         self.listWidget_smp.setSelectionMode(
             QtWidgets.QAbstractItemView.MultiSelection)
         self.listWidget_smp.setObjectName("listWidget_smp")
-        # self.listWidget_smp.installEventFilter(MainWindow)
-        # add horizontal layout to vertical layout
         self.verticalLayout.addLayout(self.horizontal_btn_Layout)
         self.verticalLayout.addWidget(self.listWidget_smp)
         self.horizontalLayout.addWidget(self.groupBox_2)
@@ -657,16 +669,14 @@ class Ui_MainWindow(object):
 
         ################################################
 
-        #####################################################################
-
-        MainWindow.setCentralWidget(self.centralwidget)
-        self.menubar = QtWidgets.QMenuBar(MainWindow)
+        #################################################
+        self.menubar = QtWidgets.QMenuBar(self)
         self.menubar.setGeometry(QtCore.QRect(0, 0, 1000, 22))
         self.menubar.setObjectName("menubar")
-        MainWindow.setMenuBar(self.menubar)
-        self.statusbar = QtWidgets.QStatusBar(MainWindow)
+        self.setMenuBar(self.menubar)
+        self.statusbar = QtWidgets.QStatusBar(self)
         self.statusbar.setObjectName("statusbar")
-        MainWindow.setStatusBar(self.statusbar)
+        self.setStatusBar(self.statusbar)
         ####################################################
         # flags
         ####################################################
@@ -681,7 +691,7 @@ class Ui_MainWindow(object):
         # self.show_warning_messagebox("The Y direct beam input box is now set to be consistant with pyFAI not FIT2d. For the LFP image and FIT2d use 2352 - Y direct beam. The best option is to always use a .poni file.")
 
         if not self.BL23A_mode:
-            dlg = QtWidgets.QMessageBox(MainWindow)
+            dlg = QtWidgets.QMessageBox(self)
             dlg.setWindowTitle("Use FIT2d mode?")
             dlg.setText("FIT2d uses flipped images, select Yes to set FIT2d mode and directly enter calibration values outputted from FIT2d. Otherwise select No and input a .poni file.")
             dlg.setStandardButtons(QtWidgets.QMessageBox.Yes |
@@ -697,7 +707,7 @@ class Ui_MainWindow(object):
         self.background_data = {}
         self.processed_data = {}
 
-        self.retranslateUi(MainWindow)
+        self.retranslateUi()
         if self.BL23A_mode:
             self.set_BL23A_mode()
 
@@ -705,11 +715,11 @@ class Ui_MainWindow(object):
 
         self.tabWidget.setCurrentIndex(2)
         self.set_enable_data_operations(False)
-        QtCore.QMetaObject.connectSlotsByName(MainWindow)
+        QtCore.QMetaObject.connectSlotsByName(self)
 
-    def retranslateUi(self, MainWindow):
+    def retranslateUi(self):
         _translate = QtCore.QCoreApplication.translate
-        MainWindow.setWindowTitle(_translate("MainWindow", "LFP reduction"))
+        self.setWindowTitle(_translate("MainWindow", "LFP reduction"))
         self.grpBx_TM.setTitle(_translate("MainWindow", "TM"))
         self.lineEdit_bkg_TM.setText(_translate("MainWindow", "1.0"))
         self.lbl_bkg_TM.setText(_translate("MainWindow", "Background TM:"))
@@ -1306,7 +1316,7 @@ class Ui_MainWindow(object):
                 self.clear_lists()
 
     def click_load_reject(self):
-        fname, _ = QtWidgets.QFileDialog.getOpenFileName(MainWindow,
+        fname, _ = QtWidgets.QFileDialog.getOpenFileName(self,
                                                          "Select reject file", "", " REJECT (REJECT.dat);;All Files (*)")
         if fname and fname != "":
             mask_data = np.loadtxt(fname, usecols=(0, 1), comments='#')
@@ -1331,7 +1341,7 @@ class Ui_MainWindow(object):
                 "No image files loaded. Load an image file and try again.")
 
     def click_load_mask(self):
-        fname, _ = QtWidgets.QFileDialog.getOpenFileName(MainWindow,
+        fname, _ = QtWidgets.QFileDialog.getOpenFileName(self,
                                                          "Select a mask file", "", "Fit2d mask (*.msk) ;;tif Image (*.tif);;edf Image (*.edf);;All Files (*)")
         if fname and fname != "":
             self.mask = fabio.open(fname).data
@@ -1357,7 +1367,7 @@ class Ui_MainWindow(object):
         speedLightC = float(299_792_458)
 
         fname, _ = QtWidgets.QFileDialog.getOpenFileName(
-            MainWindow, "Select PSAXSpar.txt file", "", "txt (*.txt);;All Files (*)")
+            self, "Select PSAXSpar.txt file", "", "txt (*.txt);;All Files (*)")
         if fname and fname != "":
             Fit2dDic = self.readSAXSpar(fname)
 
@@ -1399,7 +1409,7 @@ class Ui_MainWindow(object):
             for item in self.listWidget_smp.selectedItems():
                 old_name = item.text()
                 new_name, ok = QInputDialog.getText(
-                    MainWindow, 'Rename Dialog', 'Change name from ' + old_name.split("~")[1] + ' to:')
+                    self, 'Rename Dialog', 'Change name from ' + old_name.split("~")[1] + ' to:')
                 if ok and new_name != "":
                     if (old_name.split('~')[0] + '~' + new_name) in self.sample_data:
                         self.show_warning_messagebox(
@@ -1417,7 +1427,7 @@ class Ui_MainWindow(object):
             for item in self.listWidget_bkg.selectedItems():
                 old_name = item.text()
                 new_name, ok = QInputDialog.getText(
-                    MainWindow, 'Rename Dialog', 'Change name from ' + old_name.split("~")[1] + ' to:')
+                    self, 'Rename Dialog', 'Change name from ' + old_name.split("~")[1] + ' to:')
                 if ok and new_name != "":
                     if (old_name.split('~')[0] + '~' + new_name) in self.background_data:
                         self.show_warning_messagebox(
@@ -1433,7 +1443,7 @@ class Ui_MainWindow(object):
             for item in self.listWidget_sub.selectedItems():
                 old_name = item.text()
                 new_name, ok = QInputDialog.getText(
-                    MainWindow, 'Rename Dialog', 'Change name from ' + old_name.split("~")[1] + ' to:')
+                    self, 'Rename Dialog', 'Change name from ' + old_name.split("~")[1] + ' to:')
                 if ok and new_name != "":
                     if (old_name.split('~')[0] + '~' + new_name) in self.processed_data:
                         self.show_warning_messagebox(
@@ -1686,7 +1696,7 @@ class Ui_MainWindow(object):
         try:
             if self.BL23A_mode:
                 fname, _ = QtWidgets.QFileDialog.getOpenFileName(
-                        MainWindow, "Select parameter file.toml", "", "toml (*.toml);;All Files (*)")
+                        self, "Select parameter file.toml", "", "toml (*.toml);;All Files (*)")
                 if fname and fname != "":
                     with open(fname, "rb") as f:
                         Fit2dDic = tomli.load(f)
@@ -1700,7 +1710,7 @@ class Ui_MainWindow(object):
                     self.show_warning_messagebox(
                         "FIT2d mode is currently set so the image is flipped compared to .poni orientation. Please restart and set no to FIT2d option or proceed with care!")
                 fname, _ = QtWidgets.QFileDialog.getOpenFileName(
-                    MainWindow, "Select PONI file", "", "PONI (*.poni);;All Files (*)")
+                    self, "Select PONI file", "", "PONI (*.poni);;All Files (*)")
                 if fname and fname != "":
                     self.ai = pyFAI.load(fname)
                     Fit2dDic = self.ai.getFit2D()
@@ -1778,7 +1788,7 @@ class Ui_MainWindow(object):
 
             if self.BL23A_mode:
                 fname, _ = QtWidgets.QFileDialog.getSaveFileName(
-                    MainWindow, "Parameter file save name", "", "toml (*.toml);;All Files (*)")
+                    self, "Parameter file save name", "", "toml (*.toml);;All Files (*)")
                 if fname and fname != "":
                     if os.path.splitext(fname)[1] != ".toml":
                         fname += ".toml"
@@ -1786,7 +1796,7 @@ class Ui_MainWindow(object):
                         tomli_w.dump(Fit2dDic, f)
             else:
                 fname, _ = QtWidgets.QFileDialog.getSaveFileName(
-                    MainWindow, "Poni file save name", "", "PONI (*.poni);;All Files (*)")
+                    self, "Poni file save name", "", "PONI (*.poni);;All Files (*)")
 
                 self.ai.write(fname)
             self.disable_params_input()
@@ -1918,7 +1928,7 @@ class Ui_MainWindow(object):
         print(array.dtype)
         print(np.max(array))
         if num_high_pix > 0 and self.bit_depth < 32:
-            dlg = QtWidgets.QMessageBox(MainWindow)
+            dlg = QtWidgets.QMessageBox(self)
             dlg.setWindowTitle(
                 "Pixel(s) overflowing, convert to higher bit depth")
             dlg.setText(str(num_high_pix) + " saturated pixels in image " + name + ". \n Select \"YES\" to set image type to " + str(
@@ -2280,7 +2290,7 @@ class Ui_MainWindow(object):
     def import_data(self, data_type):
         # open file dialog returns a tuple
         fnames, _ = QtWidgets.QFileDialog.getOpenFileNames(
-            MainWindow, "Select multiple files", "", " tif Image (*.tif);;h5 Image (*master.h5);;1D data (*.dat);;All Files (*)")
+            self, "Select multiple files", "", " tif Image (*.tif);;h5 Image (*master.h5);;1D data (*.dat);;All Files (*)")
         plot_2D_flag = False
         if not fnames or fnames == "":
             return
@@ -2527,9 +2537,7 @@ class Ui_MainWindow(object):
 
 if __name__ == "__main__":
     import sys
-    app = QtWidgets.QApplication(sys.argv)
-    MainWindow = QtWidgets.QMainWindow()
-    ui = Ui_MainWindow()
-    ui.setupUi(MainWindow)
-    MainWindow.show()
+    app = QApplication(sys.argv)
+    win = Window()
+    win.show()
     sys.exit(app.exec_())
