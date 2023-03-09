@@ -1,12 +1,20 @@
 # -*- coding: utf-8 -*-
 
-from utils import *
-
-import ctypes
+from utils import (
+   Data_1d,
+   Data_1d_az,
+   Data_2d,
+   Data_2d_az,
+   Data_2d_rot,
+   append_name,
+   AngleAnnotation,
+   make_reject_mask,
+   make_saturated_mask,
+   combine_masks
+)
+import tomli
+import tomli_w
 import sys
-
-#from threading import Thread
-#from PyQt5.QtCore import pyqtSlot, QThreadPool
 import numpy as np
 import fabio
 import os
@@ -16,38 +24,32 @@ from pyFAI import azimuthalIntegrator
 from PyQt5 import QtCore, QtGui, QtWidgets
 from matplotlib import pyplot
 from pathlib import Path
-
-# adding below for matplotlib
 from PyQt5.QtWidgets import (
     QWidget,
-    QDialog, 
     QApplication,
-    QPushButton, 
-    QVBoxLayout, 
-    QInputDialog, 
-    QMenu, 
-    QAction,
+    QInputDialog,
+    QMenu,
     QMainWindow
-)
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
-#import matplotlib.pyplot as plt
+    )
+from matplotlib.backends.backend_qt5agg import \
+    FigureCanvasQTAgg as FigureCanvas
+from matplotlib.backends.backend_qt5agg import \
+    NavigationToolbar2QT as NavigationToolbar
 from matplotlib.colors import SymLogNorm
-import random
 
 
 class Window(QMainWindow):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setupUi()
-    
-    def setupUi(self):
+        self.setup_ui()
+
+    def setup_ui(self):
         self.setObjectName("MainWindow")
         self.resize(1000, 900)
         #####################################################################
         # not needed on linux etc
-        #myappid = u'LFP_reduction'
-        #ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
+        # myappid = u'LFP_reduction'
+        # ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
         #####################################################################
         self.setWindowIcon(QtGui.QIcon('../images/icon.png'))
         self.centralWidget = QWidget()
@@ -159,7 +161,8 @@ class Window(QMainWindow):
         self.btn_import_smp.setObjectName("btn_import_smp")
         # select all /clear all button
         self.btn_sel_clr_smp = QtWidgets.QPushButton(
-            self.verticalLayoutWidget, clicked=lambda: self.click_select_deselect_all("smp"))
+            self.verticalLayoutWidget, clicked=lambda:
+            self.click_select_deselect_all("smp"))
         font = QtGui.QFont()
         font.setStyleName('Microsoft Sans Serif')
         font.setPointSize(11)
@@ -205,7 +208,8 @@ class Window(QMainWindow):
         self.horizontal_btn_Layout_2.setObjectName("horizontal_btn_Layout_2")
         # import button
         self.btn_import_bkg = QtWidgets.QPushButton(
-            self.verticalLayoutWidget_2, clicked=lambda: self.import_data("bkg"))
+            self.verticalLayoutWidget_2, clicked=lambda:
+            self.import_data("bkg"))
         font = QtGui.QFont()
         font.setStyleName('Microsoft Sans Serif')
         font.setPointSize(11)
@@ -215,7 +219,8 @@ class Window(QMainWindow):
         self.btn_import_bkg.setObjectName("btn_import_bkg")
         # select all /clear all button
         self.btn_sel_clr_bkg = QtWidgets.QPushButton(
-            self.verticalLayoutWidget, clicked=lambda: self.click_select_deselect_all("bkg"))
+            self.verticalLayoutWidget, clicked=lambda:
+            self.click_select_deselect_all("bkg"))
         font = QtGui.QFont()
         font.setStyleName('Microsoft Sans Serif')
         font.setPointSize(11)
@@ -264,7 +269,8 @@ class Window(QMainWindow):
         self.horizontal_btn_Layout.setObjectName("horizontal_btn_Layout_3")
         # import button
         self.btn_import_subd = QtWidgets.QPushButton(
-            self.verticalLayoutWidget_3, clicked=lambda: self.import_data("sub"))
+            self.verticalLayoutWidget_3, clicked=lambda:
+            self.import_data("sub"))
         font = QtGui.QFont()
         font.setStyleName('Microsoft Sans Serif')
         font.setPointSize(11)
@@ -274,7 +280,8 @@ class Window(QMainWindow):
         self.btn_import_subd.setObjectName("btn_import_subd")
         # select all /clear all button
         self.btn_sel_clr_sub = QtWidgets.QPushButton(
-            self.verticalLayoutWidget_3, clicked=lambda: self.click_select_deselect_all("sub"))
+            self.verticalLayoutWidget_3, clicked=lambda:
+            self.click_select_deselect_all("sub"))
         self.btn_sel_clr_sub.setFont(font)
         self.btn_sel_clr_sub.setObjectName("btn_sel_clr_sub")
         # line edit for subtracted filter
@@ -344,25 +351,17 @@ class Window(QMainWindow):
         font.setWeight(75)
         self.groupBox_5.setFont(font)
         self.groupBox_5.setObjectName("groupBox_5")
-
         self.groupBox_rot_img = QtWidgets.QGroupBox(self.tab)
         self.groupBox_rot_img.setGeometry(QtCore.QRect(739, 211, 181, 101))
         self.groupBox_rot_img.setObjectName("groupBox_rot_img")
         self.groupBox_rot_img.setFont(font)
-
-        # self.btn_get_rot_ang = QtWidgets.QPushButton(self.groupBox_rot_img, clicked= lambda: self.click_get_rot_ang())
-        # self.btn_get_rot_ang.setGeometry(QtCore.QRect(10, 100, 75, 25))
-        # self.btn_get_rot_ang.setObjectName("btn_get_rot_ang")
-
         self.lbl_rot_ang = QtWidgets.QLabel(self.groupBox_rot_img)
         self.lbl_rot_ang.setGeometry(QtCore.QRect(15, 30, 67, 17))
-
         self.dsb_rot_ang = QtWidgets.QDoubleSpinBox(self.groupBox_rot_img)
         self.dsb_rot_ang.setGeometry(QtCore.QRect(15, 57, 67, 26))
         self.dsb_rot_ang.setMinimum(-360.0)
         self.dsb_rot_ang.setMaximum(360.0)
         self.dsb_rot_ang.setValue(0.0)
-
         self.btn_rot_img = QtWidgets.QPushButton(
             self.groupBox_rot_img, clicked=lambda: self.click_rot_img())
         self.btn_rot_img.setGeometry(QtCore.QRect(95, 57, 75, 25))
@@ -385,7 +384,6 @@ class Window(QMainWindow):
         self.comboBox_size.addItem("3")
         self.comboBox_size.addItem("5")
         self.comboBox_size.setCurrentIndex(1)
-        
         self.lineEdit_threshold = QtWidgets.QLineEdit(self.groupBox_5)
         self.lineEdit_threshold.setGeometry(QtCore.QRect(10, 100, 113, 25))
         self.lineEdit_threshold.setObjectName("lineEdit_threshold")
@@ -406,19 +404,13 @@ class Window(QMainWindow):
         font.setWeight(50)
         self.btn_remove_outliers.setFont(font)
         self.btn_remove_outliers.setObjectName("btn_remove_outliers")
-        # self.btn_2d_subtract = QtWidgets.QPushButton(self.tab, clicked = lambda: self.subtract_2D())
-        # self.btn_2d_subtract.setGeometry(QtCore.QRect(788, 454, 121, 41))
         font = QtGui.QFont()
         font.setStyleName('Microsoft Sans Serif')
         font.setPointSize(12)
         font.setBold(True)
         font.setWeight(75)
-        # self.btn_2d_subtract.setFont(font)
-        # self.btn_2d_subtract.setObjectName("btn_2d_subtract")
-
-        #####################################################################
         self.btn_2d_integrate = QtWidgets.QPushButton(
-            self.tab, clicked=lambda: self.click_integrate_2D())
+            self.tab, clicked=lambda: self.click_integrate_2d())
         self.btn_2d_integrate.setGeometry(QtCore.QRect(788, 404, 121, 41))
         font = QtGui.QFont()
         font.setStyleName('Microsoft Sans Serif')
@@ -427,14 +419,6 @@ class Window(QMainWindow):
         font.setWeight(75)
         self.btn_2d_integrate.setFont(font)
         self.btn_2d_integrate.setObjectName("btn_2d_integrate")
-
-        #####################################################################
-        # self.frame = QtWidgets.QFrame(self.tab)
-        # self.frame.setGeometry(QtCore.QRect(9, 9, 721, 481))
-        # self.frame.setFrameShape(QtWidgets.QFrame.StyledPanel)
-        # self.frame.setFrameShadow(QtWidgets.QFrame.Raised)
-        # self.frame.setObjectName("frame")
-        ######################################################################
         self.tabWidget.addTab(self.tab, "")
         self.tab_2 = QtWidgets.QWidget()
         self.tab_2.setObjectName("tab_2")
@@ -465,7 +449,9 @@ class Window(QMainWindow):
         self.lineEdit_rotAngTiltPlane = QtWidgets.QLineEdit(self.groupBox_6)
         self.lineEdit_rotAngTiltPlane.setGeometry(
             QtCore.QRect(10, 210, 113, 25))
-        self.lineEdit_rotAngTiltPlane.setObjectName("lineEdit_rotAngTiltPlane")
+        self.lineEdit_rotAngTiltPlane.setObjectName(
+            "lineEdit_rotAngTiltPlane"
+            )
         self.lineEdit_angDetTilt = QtWidgets.QLineEdit(self.groupBox_6)
         self.lineEdit_angDetTilt.setGeometry(QtCore.QRect(10, 240, 113, 25))
         self.lineEdit_angDetTilt.setObjectName("lineEdit_angDetTilt")
@@ -504,15 +490,15 @@ class Window(QMainWindow):
         self.label_11.setGeometry(QtCore.QRect(130, 404, 241, 17))
         self.label_11.setObjectName("label_10")
         self.btn_load_PONI = QtWidgets.QPushButton(
-            self.groupBox_6, clicked=lambda: self.click_load_PONI())
+            self.groupBox_6, clicked=lambda: self.click_load_poni())
         self.btn_load_PONI.setGeometry(QtCore.QRect(10, 280, 91, 25))
         self.btn_load_PONI.setObjectName("btn_load_PONI")
         self.btn_save_PONI = QtWidgets.QPushButton(
-            self.groupBox_6, clicked=lambda: self.click_save_PONI())
+            self.groupBox_6, clicked=lambda: self.click_save_poni())
         self.btn_save_PONI.setGeometry(QtCore.QRect(110, 280, 89, 25))
         self.btn_save_PONI.setObjectName("btn_save_PONI")
         self.btn_load_PSAXS = QtWidgets.QPushButton(
-            self.groupBox_6, clicked=lambda: self.click_load_PSAXS())
+            self.groupBox_6, clicked=lambda: self.click_load_psaxs())
         self.btn_load_PSAXS.setGeometry(QtCore.QRect(10, 310, 121, 25))
         self.btn_load_PSAXS.setObjectName("btn_load_PSAXS")
         self.btn_load_mask = QtWidgets.QPushButton(
@@ -523,17 +509,12 @@ class Window(QMainWindow):
             self.groupBox_6, clicked=lambda: self.click_load_reject())
         self.btn_load_reject.setGeometry(QtCore.QRect(10, 370, 89, 25))
         self.btn_load_reject.setObjectName("btn_load_reject")
-
         self.cb_002 = QtWidgets.QCheckBox(self.groupBox_6)
         self.cb_002.setGeometry(QtCore.QRect(141, 310, 141, 25))
         self.cb_002.stateChanged.connect(self.check002)
-
         self.saturated_pix_mask = False
-
         self.tabWidget.addTab(self.tab_2, "")
         self.tabWidget.addTab(self.tab_settings, "")
-        # self.btn_remove = QtWidgets.QPushButton(self.groupBox)
-
         self.btn_remove = QtWidgets.QPushButton(
             self.groupBox, clicked=lambda: self.remove_selected())
         self.btn_remove.setGeometry(QtCore.QRect(10, 190, 101, 25))
@@ -554,14 +535,11 @@ class Window(QMainWindow):
         font.setWeight(50)
         self.btn_export.setFont(font)
         self.btn_export.setObjectName("btn_export")
-
         self.btn_rename = QtWidgets.QPushButton(
             self.groupBox, clicked=lambda: self.click_rename())
         self.btn_rename.setGeometry(QtCore.QRect(240, 190, 101, 25))
         self.btn_rename.setFont(font)
         self.btn_rename.setObjectName("btn_rename")
-
-        ####################################################################
         self.groupBox_az_integration = QtWidgets.QGroupBox(self.tab)
         self.groupBox_az_integration.setGeometry(
             QtCore.QRect(739, 160, 181, 161))
@@ -592,12 +570,10 @@ class Window(QMainWindow):
         self.lbl_q_bins.setGeometry(QtCore.QRect(30, 80, 121, 17))
         self.lbl_q_bins.setObjectName("lbl_q_bins")
         self.btn_az_integrate = QtWidgets.QPushButton(
-            self.groupBox_az_integration, clicked=lambda: self.click_integrate())
+            self.groupBox_az_integration, clicked=lambda:
+            self.click_integrate())
         self.btn_az_integrate.setGeometry(QtCore.QRect(40, 130, 89, 25))
         self.btn_az_integrate.setObjectName("btn_az_integrate")
-        #####################################################################
-
-        #####################################################################
         self.groupBox_rad_integration = QtWidgets.QGroupBox(self.tab)
         self.groupBox_rad_integration.setGeometry(
             QtCore.QRect(739, 320, 181, 171))
@@ -608,7 +584,8 @@ class Window(QMainWindow):
         self.dsb_start_q.setObjectName("dsb_start_q")
         self.dsb_start_q.setProperty("value", 0)
         self.dsb_start_q.setDecimals(6)
-        self.lbl_radial_range = QtWidgets.QLabel(self.groupBox_rad_integration)
+        self.lbl_radial_range = QtWidgets.QLabel(
+            self.groupBox_rad_integration)
         self.lbl_radial_range.setGeometry(QtCore.QRect(10, 30, 161, 17))
         self.lbl_radial_range.setObjectName("lbl_radial_range")
         self.dsb_end_q = QtWidgets.QDoubleSpinBox(
@@ -623,53 +600,32 @@ class Window(QMainWindow):
         self.sb_chi_points.setProperty("value", 100)
         self.sb_chi_points.setObjectName("sb_chi_points")
         self.btn_rad_integrate = QtWidgets.QPushButton(
-            self.groupBox_rad_integration, clicked=lambda: self.click_integrate_radial())
+            self.groupBox_rad_integration, clicked=lambda:
+            self.click_integrate_radial())
         self.btn_rad_integrate.setGeometry(QtCore.QRect(40, 130, 89, 25))
         self.btn_rad_integrate.setObjectName("btn_rad_integrate")
         self.lbl_chi_points = QtWidgets.QLabel(self.groupBox_rad_integration)
         self.lbl_chi_points.setGeometry(QtCore.QRect(30, 80, 131, 17))
         self.lbl_chi_points.setObjectName("lbl_chi_points")
-
-        #################################################
-        # plot test here...
         self.layout = QtWidgets.QWidget(self.tab)
         self.layout.setGeometry(QtCore.QRect(0, 0, 730, 490))
         self.layout.setObjectName("layout")
         self.layout = QtWidgets.QVBoxLayout(self.layout)
-
-        # self.figure = pyplot.figure(figsize=(1, 1))
         self.figure = pyplot.figure()
         self.canvas = FigureCanvas(self.figure)
         self.toolbar = NavigationToolbar(self.canvas, self.tab)
         self.layout.addWidget(self.toolbar)
         self.layout.addWidget(self.canvas)
-        # self.canvas.setParent(self.tab)
         self.cid = self.canvas.mpl_connect('button_press_event', self.onclick)
-        # self.toolbar.setOrientation(QtCore.Qt.Vertical)
-
-        ################################################
-
-        #################################################
-        # plot 1d test here...
         self.layout2 = QtWidgets.QWidget(self.tab_2)
         self.layout2.setGeometry(QtCore.QRect(0, 0, 730, 490))
         self.layout2.setObjectName("layout2")
         self.layout2 = QtWidgets.QVBoxLayout(self.layout2)
-
         self.figure2 = pyplot.figure()
-
         self.canvas2 = FigureCanvas(self.figure2)
         self.toolbar2 = NavigationToolbar(self.canvas2, self.tab_2)
         self.layout2.addWidget(self.toolbar2)
         self.layout2.addWidget(self.canvas2)
-        # self.figure2 = pyplot.figure(figsize=(7, 5))
-        # self.canvas2.setParent(self.tab_2)
-
-        # self.toolbar2.setOrientation(QtCore.Qt.Vertical)
-
-        ################################################
-
-        #################################################
         self.menubar = QtWidgets.QMenuBar(self)
         self.menubar.setGeometry(QtCore.QRect(0, 0, 1000, 22))
         self.menubar.setObjectName("menubar")
@@ -686,16 +642,17 @@ class Window(QMainWindow):
         self.bit_depth = None
         self.ai = None
         self.batch_mode = False
-
         self.BL23A_mode = True
-        # self.show_warning_messagebox("The Y direct beam input box is now set to be consistant with pyFAI not FIT2d. For the LFP image and FIT2d use 2352 - Y direct beam. The best option is to always use a .poni file.")
-
         if not self.BL23A_mode:
             dlg = QtWidgets.QMessageBox(self)
             dlg.setWindowTitle("Use FIT2d mode?")
-            dlg.setText("FIT2d uses flipped images, select Yes to set FIT2d mode and directly enter calibration values outputted from FIT2d. Otherwise select No and input a .poni file.")
-            dlg.setStandardButtons(QtWidgets.QMessageBox.Yes |
-                                QtWidgets.QMessageBox.No)
+            dlg.setText("FIT2d uses flipped images, \
+                        select Yes to set FIT2d mode and directly \
+                        enter calibration values outputted from FIT2d. \
+                        Otherwise select No and input a .poni file.")
+            dlg.setStandardButtons(
+                QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No
+                )
             dlg.setIcon(QtWidgets.QMessageBox.Question)
             button = dlg.exec()
             if button == QtWidgets.QMessageBox.Yes:
@@ -707,9 +664,9 @@ class Window(QMainWindow):
         self.background_data = {}
         self.processed_data = {}
 
-        self.retranslateUi()
+        self.retranslate_ui()
         if self.BL23A_mode:
-            self.set_BL23A_mode()
+            self.set_bl23a_mode()
 
         # self.thread_manager = QtCore.QThreadPool()
 
@@ -717,7 +674,7 @@ class Window(QMainWindow):
         self.set_enable_data_operations(False)
         QtCore.QMetaObject.connectSlotsByName(self)
 
-    def retranslateUi(self):
+    def retranslate_ui(self):
         _translate = QtCore.QCoreApplication.translate
         self.setWindowTitle(_translate("MainWindow", "LFP reduction"))
         self.grpBx_TM.setTitle(_translate("MainWindow", "TM"))
@@ -745,32 +702,31 @@ class Window(QMainWindow):
             _translate("MainWindow", "Rotate image:"))
         self.lbl_rot_ang.setText(_translate("MainWindow", "Angle:"))
         self.lbl_pbar.setText(_translate("MainWindow", "Progress:"))
-        # self.btn_get_rot_ang.setText(_translate("MainWindow", "Get angle"))
         self.btn_rot_img.setText(_translate("MainWindow", "Apply"))
         self.label.setText(_translate("MainWindow", "Size (pix):"))
-        #self.lineEdit_radius.setText(_translate("MainWindow", "2.0"))
         self.lineEdit_threshold.setText(_translate("MainWindow", "50"))
         self.label_2.setText(_translate("MainWindow", "Threshold:"))
         self.btn_remove_outliers.setText(
             _translate("MainWindow", "Apply to selected"))
-        # self.btn_2d_subtract.setText(_translate("MainWindow", "2D subtraction"))
-        self.btn_2d_integrate.setText(_translate("MainWindow", "2D integrate"))
+        self.btn_2d_integrate.setText(
+            _translate("MainWindow", "2D integrate")
+            )
         self.tabWidget.setTabText(self.tabWidget.indexOf(
             self.tab), _translate("MainWindow", "2D Tools"))
         self.tabWidget.setTabText(self.tabWidget.indexOf(
             self.tab_2), _translate("MainWindow", "1D Tools"))
-        # self.btn_2d_subtract.setText(_translate("MainWindow", "2D subtract"))
         self.tabWidget.setTabText(self.tabWidget.indexOf(
             self.tab), _translate("MainWindow", "2D Tools"))
-        # self.Btn_show_1d.setText(_translate("MainWindow", "Plot selected"))
-        # self.btn_1D_subtract.setText(_translate("MainWindow", "1D Subtract"))
-        # self.btn_integrate.setText(_translate("MainWindow", "Integrate"))
         self.tabWidget.setTabText(self.tabWidget.indexOf(
             self.tab_2), _translate("MainWindow", "1D Tools"))
         self.groupBox_6.setTitle(_translate(
             "MainWindow", "Integration (fit 2D format)  "))
-        self.label_3.setText(_translate("MainWindow", "X pix. size [Microns]"))
-        self.label_4.setText(_translate("MainWindow", "Y pix. size [Microns]"))
+        self.label_3.setText(
+            _translate("MainWindow", "X pix. size [Microns]")
+            )
+        self.label_4.setText(
+            _translate("MainWindow", "Y pix. size [Microns]")
+            )
         self.label_5.setText(_translate("MainWindow", "S-D dist. [mm]"))
         self.label_6.setText(_translate("MainWindow", "Wavelength [Ang.]"))
         self.label_7.setText(_translate("MainWindow", "X dir. Beam [Pix.]"))
@@ -785,7 +741,9 @@ class Window(QMainWindow):
         self.btn_load_mask.setText(_translate("MainWindow", "Load mask"))
         self.btn_load_reject.setText(_translate("MainWindow", "Load reject"))
         self.btn_save_PONI.setText(_translate("MainWindow", "Save PONI"))
-        self.btn_load_PSAXS.setText(_translate("MainWindow", "Load PSAXS.txt"))
+        self.btn_load_PSAXS.setText(
+            _translate("MainWindow", "Load PSAXS.txt")
+            )
         self.cb_002.setText(_translate("MainWindow", "monitor 002.txt"))
         self.tabWidget.setTabText(self.tabWidget.indexOf(
             self.tab_settings), _translate("MainWindow", "Settings"))
@@ -807,9 +765,7 @@ class Window(QMainWindow):
         self.lbl_chi_points.setText(_translate(
             "MainWindow", "Number of points: "))
 
-    ###################################################
-
-    def set_enable_data_operations(self,state):
+    def set_enable_data_operations(self, state):
         self.tab.setEnabled(state)
         self.tab_2.setEnabled(state)
         self.groupBox_2.setEnabled(state)
@@ -826,8 +782,8 @@ class Window(QMainWindow):
         self.btn_load_mask.setEnabled(state)
         self.btn_load_reject.setEnabled(state)
         self.dsb_scale_factor.setEnabled(state)
-    
-    def set_BL23A_mode(self):
+
+    def set_bl23a_mode(self):
         self.btn_load_PSAXS.setVisible(True)
         self.fit2d_mode = True
         self.cb_002.setVisible(False)
@@ -840,13 +796,13 @@ class Window(QMainWindow):
     def check_batch_input(self):
         if len(self.listWidget_bkg.selectedIndexes()) > 1:
             self.show_warning_messagebox(
-                'More than one background selected, only one background can be selected to subtract off.')
+                'More than one background selected, only one can be \
+                    selected to subtract off.')
             return False
-        
 
     def click_batch_reduce(self):
         try:
-            if self.check_batch_input() == False:
+            if not self.check_batch_input():
                 return
             # set batch mode
             self.groupBox.setEnabled(False)
@@ -857,7 +813,6 @@ class Window(QMainWindow):
 
             self.batch_mode = True
             QApplication.processEvents()
-            #self.safe_click_rem_outliers()
             self.click_rem_outliers()  # deselects and selects OLR data
             self.lbl_pbar.setText("Removed outliers...1/4")
             self.pbar.setValue(25)
@@ -872,21 +827,18 @@ class Window(QMainWindow):
             self.lbl_pbar.setText("Integrated...3/4")
             self.pbar.setValue(75)
             QApplication.processEvents()
-            self.get_first_sel() # is this needed?
+            self.get_first_sel()
             self.click_export()
             self.lbl_pbar.setText("Exported all subtracted...4/4")
             self.pbar.setValue(100)
             self.batch_mode = False
             self.groupBox.setEnabled(True)
             self.listWidget_sub.clearSelection()
-        except:
-            self.show_warning_messagebox("Batch processing failed, \
-            check that sample and background data are selected. \
-            Or that the geometry is set correctly.")
+        except Exception as e:
+            print(e)
             self.batch_mode = False
             self.groupBox.setEnabled(True)
-       
-    
+
     def toggle_select_by_string(self, string, name, state):
         if name == "smp":
             items = [self.listWidget_smp.item(
@@ -906,7 +858,7 @@ class Window(QMainWindow):
             for item in items:
                 if string == item.text():
                     item.setSelected(state)
-    
+
     def select_by_filter(self, string, name):
         if name == "smp":
             if string == "":
@@ -1017,18 +969,13 @@ class Window(QMainWindow):
         bkg = self.background_data[self.listWidget_bkg.selectedIndexes()[
             0].data()]
         if isinstance(smp, Data_2d) and isinstance(bkg, Data_2d):
-            #try:
-            self.subtract_2D()
-            #except:
-            #    self.show_warning_messagebox(
-            #        "Subtraction failed. Check that the data dimensions match.")
+            self.subtract_2d()
 
         elif isinstance(smp, Data_1d) and isinstance(bkg, Data_1d):
             try:
-                self.subtract_1D()
-            except:
-                self.show_warning_messagebox(
-                    "Subtraction failed. Check that the data dimensions match.")
+                self.subtract_1d()
+            except Exception as e:
+                print(e)
         else:
             self.show_warning_messagebox(
                 "Not matching 1D or 2D data types which can be subtracted.")
@@ -1051,28 +998,29 @@ class Window(QMainWindow):
                         all_data[0].dir,
                         all_data[0].ext,
                         append_name(
-                            all_data[0].name + "_sum_" + str(len(all_data)) + "_0", self.get_data_dict(data_type)),
-                        self.sum_2D(all_data),
+                            all_data[0].name + "_sum_" + str(len(all_data)) +
+                            "_0", self.get_data_dict(data_type)),
+                        self.sum_2d(all_data),
                         all_data[0].info
                     )
                     new_data.array = self.check_overflow_pix(
                         new_data.array, new_data.name)
                     self.append_data(new_data, data_type)
                 elif data_dim == "one_dim":
-                    I, err = self.sum_1D(all_data)
+                    intensity, err = self.sum_1d(all_data)
                     new_data = Data_1d(
                         all_data[0].dir,
                         all_data[0].ext,
                         append_name(
-                            all_data[0].name + "_sum_" + str(len(all_data)) + "_0", self.get_data_dict(data_type)),
+                            all_data[0].name + "_sum_" + str(len(all_data)) +
+                            "_0", self.get_data_dict(data_type)),
                         all_data[0].q,
-                        I,
+                        intensity,
                         err,
                         all_data[0].info
                     )
                     self.append_data(new_data, data_type)
                 else:
-                    # the other case is handled in the check_selected_data_dim function
                     pass
 
     def click_average_data(self):
@@ -1085,34 +1033,37 @@ class Window(QMainWindow):
                         all_data[0].dir,
                         all_data[0].ext,
                         append_name(
-                            all_data[0].name + "_avg_" + str(len(all_data)) + "_0", self.get_data_dict(data_type)),
-                        np.divide(self.sum_2D(all_data), len(all_data)),
+                            all_data[0].name + "_avg_" + str(len(all_data)) +
+                            "_0", self.get_data_dict(data_type)),
+                        np.divide(self.sum_2d(all_data), len(all_data)),
                         all_data[0].info
                     )
                     self.append_data(new_data, data_type)
                 elif data_dim == "one_dim":
-                    I, err = self.avg_1D(all_data)
+                    intensity, err = self.avg_1d(all_data)
                     new_data = Data_1d(
                         all_data[0].dir,
                         all_data[0].ext,
                         append_name(
-                            all_data[0].name + "_avg_" + str(len(all_data)) + "_0", self.get_data_dict(data_type)),
+                            all_data[0].name + "_avg_" + str(len(all_data)) +
+                            "_0", self.get_data_dict(data_type)),
                         all_data[0].q,
-                        np.divide(I, len(all_data)),
+                        np.divide(intensity, len(all_data)),
                         np.divide(err, len(all_data)),
                         all_data[0].info
                     )
                     self.append_data(new_data, data_type)
                 else:
-                    # the other case is handled in the check_selected_data_dim function
                     pass
 
     def check_selected_data_dim(self, *args):
         data_dim = None
         for x in args:
-            if isinstance(x, Data_2d) and (data_dim == "two_dim" or data_dim is None):
+            if isinstance(x, Data_2d) and (data_dim == "two_dim" or
+                                           data_dim is None):
                 data_dim = "two_dim"
-            elif isinstance(x, Data_1d) and (data_dim == "one_dim" or data_dim is None):
+            elif isinstance(x, Data_1d) and (data_dim == "one_dim" or
+                                             data_dim is None):
                 data_dim = "one_dim"
             elif isinstance(x, Data_1d) and data_dim == "two_dim":
                 self.show_warning_messagebox("Mixture of 1D and 2D data.")
@@ -1122,7 +1073,7 @@ class Window(QMainWindow):
                 return None
         return data_dim
 
-    def sum_2D(self, all_data):
+    def sum_2d(self, all_data):
         cur_sum = []
         for item in all_data:
             if len(cur_sum) == 0:
@@ -1131,53 +1082,55 @@ class Window(QMainWindow):
                 cur_sum = np.add(cur_sum, item.array, dtype='int64')
         return cur_sum
 
-    def avg_1D(self, all_data):
-        sum_I = []
+    def avg_1d(self, all_data):
+        sum_i = []
         sum_err2 = []
         for item in all_data:
-            if len(sum_I) == 0:
-                sum_I = item.I
+            if len(sum_i) == 0:
+                sum_i = item.I
                 sum_err2 = np.power(item.err, 2)
             else:
-                sum_I = np.add(sum_I, item.I)
+                sum_i = np.add(sum_i, item.I)
                 sum_err2 = np.add(sum_err2, np.power(item.err, 2))
         # check the divide by N or N-1
-        return np.divide(sum_I, len(all_data)), np.sqrt(np.divide(sum_err2, len(all_data)))
+        return np.divide(sum_i, len(all_data)), np.sqrt(
+            np.divide(sum_err2, len(all_data)))
 
-    def sum_1D(self, all_data):
-        sum_I = []
+    def sum_1d(self, all_data):
+        sum_i = []
         sum_err2 = []
         for item in all_data:
-            if len(sum_I) == 0:
-                sum_I = item.I
+            if len(sum_i) == 0:
+                sum_i = item.I
                 sum_err2 = np.power(item.err, 2)
             else:
-                sum_I = np.add(sum_I, item.I)
+                sum_i = np.add(sum_i, item.I)
                 sum_err2 = np.add(sum_err2, np.power(item.err, 2))
-        return sum_I, np.sqrt(sum_err2)
-    
+        return sum_i, np.sqrt(sum_err2)
+
     def onclick(self, event):
         '''
-            This function has significant repeated code, the integration functions need to be made modular.
+            This function has significant repeated code, the
+            integration functions need to be made modular.
             double result = atan2(P3.y - P1.y, P3.x - P1.x) -
                 atan2(P2.y - P1.y, P2.x - P1.x);
         '''
 
-        if event.button == 3 and isinstance(self.get_plot_image_data(), Data_2d):
+        if event.button == 3 and isinstance(self.get_plot_image_data(),
+                                            Data_2d):
             if self.ai is None:
                 self.no_ai_found_error()
                 return
             self.ix, self.iy = event.xdata, event.ydata
             q = np.squeeze(self.ai.qFunction(self.iy, self.ix)) / 10
             chi = np.rad2deg(self.ai.chi(self.iy, self.ix))
-            #chi = self.correct_angle(chi)
             p1 = (float(self.lineEdit_X_dir.text()),
                   float(self.lineEdit_Y_dir.text()))
             p3 = (self.ix, self.iy)
             len_p1_p3 = np.sqrt((p1[0]-p3[0])**2 + (p1[1]-p3[1])**2)
             p2 = (p3[0], p3[1] + len_p1_p3)
             # - np.arctan2(p2[1]-p1[1], p2[0] - p1[0])
-            angle = np.arctan2(p3[1] - p1[1], p3[0] - p1[0])
+            # angle = np.arctan2(p3[1] - p1[1], p3[0] - p1[0])
             menu = QMenu()
             menu.addAction(f'q is: {q:.5f} A^-1')
             menu.addAction(f'chi is: {chi:.2f} deg.')
@@ -1217,31 +1170,35 @@ class Window(QMainWindow):
                 line1, = self.ax.plot(*zip(*p1), color="lime")
                 line2, = self.ax.plot(*zip(*p2), color="lime")
                 # point, = ax.plot(*center, marker="o")
-                am1 = AngleAnnotation(center, p1[0], p2[0], text=r"$\chi$", textposition="outside",
-                                      ax=self.ax, size=75, color="lime", text_kw=dict(color="lime"))
+                AngleAnnotation(
+                    center, p1[0], p2[0], text=r"$\chi$",
+                    textposition="outside",
+                    ax=self.ax, size=75, color="lime",
+                    text_kw=dict(color="lime")
+                    )
                 self.canvas.draw()
             elif action == azi_integrate:
                 data = self.get_plot_image_data()
                 self.figure2.clear()
                 ax2 = self.figure2.add_subplot(111)
                 if data.info["type"] == "smp":
-                    normValue = float(self.lineEdit_smp_TM.text().strip())
+                    norm_value = float(self.lineEdit_smp_TM.text().strip())
                 elif data.info["type"] == "bkg":
-                    normValue = float(self.lineEdit_bkg_TM.text().strip())
+                    norm_value = float(self.lineEdit_bkg_TM.text().strip())
                 else:
-                    normValue = 1
+                    norm_value = 1
 
-                normValue /= self.dsb_scale_factor.value()
+                norm_value /= self.dsb_scale_factor.value()
                 if self.monitor_002:
-                    normValue *= data.info["civi"]
+                    norm_value *= data.info["civi"]
 
-                q, I, err = data.integrate_image(
+                q, intensity, err = data.integrate_image(
                     self.ai,
                     self.sb_q_bins.value(),
                     self.dsb_chi_start.value(),
                     self.dsb_chi_end.value(),
                     self.mask,
-                    normValue
+                    norm_value
                 )
 
                 new_data = Data_1d(
@@ -1249,15 +1206,15 @@ class Window(QMainWindow):
                     "dat",
                     "1D~" + data.name.split("~")[1],
                     q,
-                    I,
+                    intensity,
                     err,
                     {"type": data.info["type"]}
                 )
                 self.append_data(new_data, new_data.info['type'])
-                self.plot_1D_1D_data(
+                self.plot_1d_1d_data(
                     ax2,
                     new_data.q,
-                    new_data.I, new_data.err,
+                    new_data.intensity, new_data.err,
                     new_data.name.split("~")[1]
                 )
                 self.canvas2.draw()
@@ -1267,8 +1224,8 @@ class Window(QMainWindow):
                 item = self.get_plot_image_data()
                 self.figure2.clear()
                 ax2 = self.figure2.add_subplot(111)
-                chi, I = self.integrate_radial(item)
-                if len(I) < 2:
+                chi, intensity = self.integrate_radial(item)
+                if len(intensity) < 2:
                     self.show_warning_messagebox(
                         "Warning, length of data is less than 2!!")
                     return
@@ -1277,14 +1234,14 @@ class Window(QMainWindow):
                     "dat",
                     "1Daz~" + item.name.split("~")[1],
                     chi,
-                    I,
+                    intensity,
                     {"type": item.info["type"]}
                 )
                 self.append_data(data, data.info["type"])
-                self.plot_1D_az(
+                self.plot_1d_az(
                     ax2,
                     data.chi,
-                    data.I,
+                    data.intensity,
                     data.name.split("~")[1]
                 )
                 self.tabWidget.setCurrentWidget(self.tab_2)
@@ -1310,14 +1267,17 @@ class Window(QMainWindow):
                 # print(rotd_img)
                 name = "2d_rot_" + data.name.split('~')[1]
                 self.append_data(Data_2d_rot(
-                    data.dir, data.ext, name, rotd_img, data.info), data.info["type"])
+                    data.dir, data.ext, name, rotd_img, data.info),
+                    data.info["type"])
                 self.set_plot_image_name(name, data.info["type"])
-                self.plot_2D(rotd_img, name)
+                self.plot_2d(rotd_img, name)
                 self.clear_lists()
 
     def click_load_reject(self):
-        fname, _ = QtWidgets.QFileDialog.getOpenFileName(self,
-                                                         "Select reject file", "", " REJECT (REJECT.dat);;All Files (*)")
+        fname, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self, "Select reject file", "",
+            " REJECT (REJECT.dat);;All Files (*)"
+            )
         if fname and fname != "":
             mask_data = np.loadtxt(fname, usecols=(0, 1), comments='#')
             # print(self.listWidget_smp.count())
@@ -1335,21 +1295,23 @@ class Window(QMainWindow):
                         return
                     else:
                         self.mask = combine_masks(make_reject_mask(
-                            np.zeros(np.shape(data.array)), mask_data), self.mask)
+                            np.zeros(np.shape(data.array)), mask_data),
+                            self.mask)
                         return
             self.show_warning_messagebox(
                 "No image files loaded. Load an image file and try again.")
 
     def click_load_mask(self):
-        fname, _ = QtWidgets.QFileDialog.getOpenFileName(self,
-                                                         "Select a mask file", "", "Fit2d mask (*.msk) ;;tif Image (*.tif);;edf Image (*.edf);;All Files (*)")
+        fname, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self, "Select a mask file", "",
+            "Fit2d mask (*.msk) ;;tif Image (*.tif);;edf Image \
+                (*.edf);;All Files (*)")
         if fname and fname != "":
             self.mask = fabio.open(fname).data
             if fname.endswith(".msk"):
                 self.mask = np.flipud(self.mask)
             if self.fit2d_mode:
                 self.mask = np.flipud(self.mask)
-            
 
     def mask_pix_zero(self, image):
         inv_mask = np.abs(1-self.mask)
@@ -1362,39 +1324,43 @@ class Window(QMainWindow):
         image[self.mask == 1] = np.nan
         return image
 
-    def click_load_PSAXS(self):
-        plankC = float(4.135667696e-15)
-        speedLightC = float(299_792_458)
+    def click_load_psaxs(self):
+        plank_const = float(4.135667696e-15)
+        speed_light = float(299_792_458)
 
         fname, _ = QtWidgets.QFileDialog.getOpenFileName(
-            self, "Select PSAXSpar.txt file", "", "txt (*.txt);;All Files (*)")
+            self, "Select PSAXSpar.txt file", "",
+            "txt (*.txt);;All Files (*)")
         if fname and fname != "":
-            Fit2dDic = self.readSAXSpar(fname)
+            fit2d_dic = self.readSAXSpar(fname)
 
             self.ai = azimuthalIntegrator.AzimuthalIntegrator(
-                detector=Fit2dDic['detector'], wavelength=plankC * speedLightC / 1000 / Fit2dDic['energy'])
+                detector=fit2d_dic['detector'],
+                wavelength=plank_const * speed_light / 1000 /
+                fit2d_dic['energy']
+                )
             self.ai.setFit2D(
-                Fit2dDic["directBeam"],
-                Fit2dDic["beamX"],
-                Fit2dDic["beamY"],
-                Fit2dDic["tilt"],
-                Fit2dDic["tiltPlanRotation"]
+                fit2d_dic["directBeam"],
+                fit2d_dic["beamX"],
+                fit2d_dic["beamY"],
+                fit2d_dic["tilt"],
+                fit2d_dic["tiltPlanRotation"]
             )
-            del Fit2dDic
-            Fit2dDic = self.ai.getFit2D()
+            del fit2d_dic
+            fit2d_dic = self.ai.getFit2D()
 
             # fill out line entrys
-            self.lineEdit_X.setText(str(Fit2dDic["pixelX"])[0:12])
-            self.lineEdit_Y.setText(str(Fit2dDic["pixelY"])[0:12])
-            # .text(Fit2dDic["directDist"])
-            self.lineEdit_SD.setText(str(Fit2dDic["directDist"])[0:12])
+            self.lineEdit_X.setText(str(fit2d_dic["pixelX"])[0:12])
+            self.lineEdit_Y.setText(str(fit2d_dic["pixelY"])[0:12])
+            # .text(fit2d_dic["directDist"])
+            self.lineEdit_SD.setText(str(fit2d_dic["directDist"])[0:12])
             self.lineEdit_wavelength.setText(
                 str(10_000_000_000 * self.ai.get_wavelength())[0:12])
-            self.lineEdit_X_dir.setText(str(Fit2dDic["centerX"])[0:12])
-            self.lineEdit_Y_dir.setText(str(Fit2dDic["centerY"])[0:12])
+            self.lineEdit_X_dir.setText(str(fit2d_dic["centerX"])[0:12])
+            self.lineEdit_Y_dir.setText(str(fit2d_dic["centerY"])[0:12])
             self.lineEdit_rotAngTiltPlane.setText(
-                str(Fit2dDic["tiltPlanRotation"])[0:12])
-            self.lineEdit_angDetTilt.setText(str(Fit2dDic["tilt"])[0:12])
+                str(fit2d_dic["tiltPlanRotation"])[0:12])
+            self.lineEdit_angDetTilt.setText(str(fit2d_dic["tilt"])[0:12])
 
     def check002(self, checked):
         if checked:
@@ -1409,9 +1375,11 @@ class Window(QMainWindow):
             for item in self.listWidget_smp.selectedItems():
                 old_name = item.text()
                 new_name, ok = QInputDialog.getText(
-                    self, 'Rename Dialog', 'Change name from ' + old_name.split("~")[1] + ' to:')
+                    self, 'Rename Dialog', 'Change name from ' +
+                    old_name.split("~")[1] + ' to:')
                 if ok and new_name != "":
-                    if (old_name.split('~')[0] + '~' + new_name) in self.sample_data:
+                    split_name = old_name.split('~')[0] + '~' + new_name
+                    if split_name in self.sample_data:
                         self.show_warning_messagebox(
                             "Name already exists, try again.")
                         return
@@ -1427,32 +1395,40 @@ class Window(QMainWindow):
             for item in self.listWidget_bkg.selectedItems():
                 old_name = item.text()
                 new_name, ok = QInputDialog.getText(
-                    self, 'Rename Dialog', 'Change name from ' + old_name.split("~")[1] + ' to:')
+                    self, 'Rename Dialog', 'Change name from '
+                    + old_name.split("~")[1] + ' to:')
                 if ok and new_name != "":
-                    if (old_name.split('~')[0] + '~' + new_name) in self.background_data:
+                    split_name = old_name.split('~')[0] + '~' + new_name
+                    if split_name in self.background_data:
                         self.show_warning_messagebox(
                             "Name already exists, try again.")
                         return
                     new_name = old_name.split("~")[0] + "~" + new_name
                     item.setText(new_name)
                     self.background_data[old_name].name = new_name
-                    self.background_data[new_name] = self.background_data[old_name]
+
+                    self.background_data[new_name] = \
+                        self.background_data[old_name]
+
                     del self.background_data[old_name]
 
         if len(self.listWidget_sub.selectedIndexes()) != 0:
             for item in self.listWidget_sub.selectedItems():
                 old_name = item.text()
                 new_name, ok = QInputDialog.getText(
-                    self, 'Rename Dialog', 'Change name from ' + old_name.split("~")[1] + ' to:')
+                    self, 'Rename Dialog', 'Change name from ' +
+                    old_name.split("~")[1] + ' to:')
                 if ok and new_name != "":
-                    if (old_name.split('~')[0] + '~' + new_name) in self.processed_data:
+                    split_name = old_name.split('~')[0] + '~' + new_name
+                    if split_name in self.processed_data:
                         self.show_warning_messagebox(
                             "Name already exists, try again.")
                         return
                     new_name = old_name.split("~")[0] + "~" + new_name
                     item.setText(new_name)
                     self.processed_data[old_name].name = new_name
-                    self.processed_data[new_name] = self.processed_data[old_name]
+                    self.processed_data[new_name] = \
+                        self.processed_data[old_name]
                     del self.processed_data[old_name]
         self.clear_lists()
 
@@ -1466,8 +1442,8 @@ class Window(QMainWindow):
             ax2 = self.figure2.add_subplot(111)
             for item in self.get_all_selected():
                 if isinstance(item, Data_2d):
-                    chi, I = self.integrate_radial(item)
-                    if len(I) < 2:
+                    chi, intensity = self.integrate_radial(item)
+                    if len(intensity) < 2:
                         self.show_warning_messagebox(
                             "Warning, length of data is less than 2!!")
                         return
@@ -1476,14 +1452,14 @@ class Window(QMainWindow):
                         "dat",
                         "1Daz~" + item.name.split("~")[1],
                         chi,
-                        I,
+                        intensity,
                         {"type": item.info["type"]}
                     )
                     self.append_data(data, data.info["type"])
-                    self.plot_1D_az(
+                    self.plot_1d_az(
                         ax2,
                         data.chi,
-                        data.I,
+                        data.intensity,
                         data.name.split("~")[1]
                     )
             self.canvas2.draw()
@@ -1493,13 +1469,13 @@ class Window(QMainWindow):
 
     def integrate_radial(self, data):
         if data.info["type"] == "smp":
-            normValue = float(self.lineEdit_smp_TM.text().strip())
+            norm_value = float(self.lineEdit_smp_TM.text().strip())
         elif data.info["type"] == "bkg":
-            normValue = float(self.lineEdit_bkg_TM.text().strip())
+            norm_value = float(self.lineEdit_bkg_TM.text().strip())
         else:
-            normValue = 1
+            norm_value = 1
 
-        chi, I = self.ai.integrate_radial(
+        chi, intensity = self.ai.integrate_radial(
             data.array,
             self.sb_chi_points.value(),
             npt_rad=1000,
@@ -1515,11 +1491,11 @@ class Window(QMainWindow):
             method='cython',
             unit='chi_deg',
             radial_unit='q_A^-1',
-            normalization_factor=normValue
+            normalization_factor=norm_value
         )
-        return chi, I
+        return chi, intensity
 
-    def click_integrate_2D(self):
+    def click_integrate_2d(self):
         del self.ai
         _ = self.get_ai()
         if self.ai is None:
@@ -1537,11 +1513,11 @@ class Window(QMainWindow):
                     )
                     self.append_data(data, data.info["type"])
                     self.set_plot_image_name(data.name, data.info["type"])
-                    self.plot_2Daz(data.array, data.name)
+                    self.plot_2d_az(data.array, data.name)
 
             return data
 
-    def subtract_1D(self):
+    def subtract_1d(self):
         if len(self.listWidget_smp.selectedIndexes()) < 1:
             self.show_warning_messagebox("No sample selected.")
             return
@@ -1550,26 +1526,26 @@ class Window(QMainWindow):
             self.show_warning_messagebox("No background selected.")
             return
 
-        if len(self.listWidget_bkg.selectedIndexes()) > 1 and len(self.listWidget_bkg.selectedIndexes()) != len(self.listWidget_smp.selectedIndexes()):
+        if len(self.listWidget_bkg.selectedIndexes()) > 1 and \
+            len(self.listWidget_bkg.selectedIndexes()) != \
+                len(self.listWidget_smp.selectedIndexes()):
             self.show_warning_messagebox(
-                'number of selected background and samples different. Returning.')
+                'number of selected background and samples different. \
+                    Returning.')
             return
 
         if (len(self.listWidget_bkg.selectedIndexes()) > 1):
             self.show_warning_messagebox(
-                'More than one background selected, only one background can be used at a time.')
+                'More than one background selected, only one background \
+                    can be used at a time.')
             return
 
-        for item in self.get_all_selected():  # check that all selected are 1D data
+        for item in self.get_all_selected():
             if not isinstance(item, Data_1d):
                 self.show_warning_messagebox(
                     'A data set is not 1 dimensional.')
                 return
 
-        # except:
-        #    self.show_warning_messagebox("No background selected.")
-        #    return
-        # if len(self.listWidget_bkg.selectedIndexes()) == 1:
         bkg_name = self.listWidget_bkg.selectedIndexes()[0].data()
         bkg_data = self.background_data[bkg_name].I
         bkg_err = self.background_data[bkg_name].err
@@ -1578,9 +1554,9 @@ class Window(QMainWindow):
             part1 = np.divide(self.sample_data[index.data()].I, float(
                 self.lineEdit_smp_TM.text()))
             part2 = np.divide(bkg_data, float(self.lineEdit_bkg_TM.text()))
-            errP1 = np.divide(self.sample_data[index.data()].err, float(
+            err_p1 = np.divide(self.sample_data[index.data()].err, float(
                 self.lineEdit_smp_TM.text()))
-            errP2 = np.divide(bkg_err, float(self.lineEdit_bkg_TM.text()))
+            err_p2 = np.divide(bkg_err, float(self.lineEdit_bkg_TM.text()))
 
             name = self.sample_data[index.data()].name
             name = "1D~" + "subd_" + name.split("~")[1]
@@ -1591,47 +1567,20 @@ class Window(QMainWindow):
                 name,
                 self.sample_data[index.data()].q,
                 np.subtract(part1, part2),
-                np.sqrt(np.add(np.power(errP1, 2), np.power(errP2, 2))),
+                np.sqrt(np.add(np.power(err_p1, 2), np.power(err_p2, 2))),
                 {"type": "sub", "dim": "1D"}
             )
 
             self.processed_data[out.name] = out
             self.listWidget_sub.addItem(out.name)
 
-        # else:
-        #     for count, index in enumerate(self.listWidget_smp.selectedIndexes()):
-
-        #         bkg_name = self.listWidget_bkg.selectedIndexes()[count].data()
-        #         bkg_data = self.background_data[bkg_name].I
-        #         bkg_err = self.background_data[bkg_name].err
-        #         part1 = np.divide(self.sample_data[index.data()].I, float(
-        #             self.lineEdit_smp_TM.text()))
-        #         part2 = np.divide(bkg_data, float(self.lineEdit_bkg_TM.text()))
-        #         errP1 = np.divide(self.sample_data[index.data()].err, float(
-        #             self.lineEdit_smp_TM.text()))
-        #         errP2 = np.divide(bkg_err, float(self.lineEdit_bkg_TM.text()))
-
-        #         name = self.sample_data[index.data()].name
-        #         name = "1D~" + "subd_" + name.split("~")[1]
-        #         name = append_name(name, self.processed_data)
-        #         out = Data_1d(
-        #             self.sample_data[index.data()].dir,
-        #             "dat",
-        #             name,
-        #             self.sample_data[index.data()].q,
-        #             np.subtract(part1, part2),
-        #             np.sqrt(np.add(np.power(errP1, 2), np.power(errP2, 2))),
-        #             {"type": "sub", "dim": "1D"}
-        #         )
-
-        #         self.processed_data[out.name] = out
-        #         self.listWidget_sub.addItem(out.name)
         self.tabWidget.setCurrentWidget(self.tab_2)
         self.clear_lists()
 
     def no_ai_found_error(self):
         self.show_warning_messagebox(
-            "Scattering geometry information is not found, input a .poni file or information from fit 2d", title="Error")
+            "Scattering geometry information is not found, \
+                input a .poni file or information from fit 2d", title="Error")
 
     def click_integrate(self):
         del self.ai
@@ -1644,99 +1593,100 @@ class Window(QMainWindow):
             for data in self.get_all_selected():
                 if isinstance(data, Data_2d):
                     if data.info["type"] == "smp":
-                        normValue = float(self.lineEdit_smp_TM.text().strip())
+                        norm_value = float(self.lineEdit_smp_TM.text().strip())
                     elif data.info["type"] == "bkg":
-                        normValue = float(self.lineEdit_bkg_TM.text().strip())
+                        norm_value = float(self.lineEdit_bkg_TM.text().strip())
                     else:
-                        normValue = 1
+                        norm_value = 1
                     if self.monitor_002:
-                        normValue *= data.info["civi"]
-
-                    # count =0
-                    # while count < 1000:
-
-                    q, I, err = data.integrate_image(
+                        norm_value *= data.info["civi"]
+                    q, intensity, err = data.integrate_image(
                         self.ai,
                         self.sb_q_bins.value(),
                         self.dsb_chi_start.value(),
                         self.dsb_chi_end.value(),
                         self.mask,
-                        normValue / self.dsb_scale_factor.value()
+                        norm_value / self.dsb_scale_factor.value()
                     )
-                    # count += 1
-
                     new_data = Data_1d(
                         data.dir,
                         "dat",
                         "1D~" + data.name.split("~")[1],
                         q,
-                        I,
+                        intensity,
                         err,
                         {"type": data.info["type"]}
                     )
                     self.append_data(new_data, new_data.info['type'])
-                    #if not self.batch_mode:
-                    self.plot_1D_1D_data(
+                    self.plot_1d_1d_data(
                         ax2,
                         new_data.q,
-                        new_data.I,
+                        new_data.intensity,
                         new_data.err,
                         new_data.name.split("~")[1]
                     )
                     if self.batch_mode:
-                        self.toggle_select_by_string(new_data.name, "sub",True)
+                        self.toggle_select_by_string(
+                            new_data.name,
+                            "sub",
+                            True
+                            )
                         QApplication.processEvents()
-                        
+
             self.canvas2.draw()
             if not self.batch_mode:
                 self.clear_lists()
                 self.tabWidget.setCurrentWidget(self.tab_2)
 
-    def click_load_PONI(self):
+    def click_load_poni(self):
         try:
             if self.BL23A_mode:
                 fname, _ = QtWidgets.QFileDialog.getOpenFileName(
-                        self, "Select parameter file.toml", "", "toml (*.toml);;All Files (*)")
+                        self, "Select parameter file.toml", "",
+                        "toml (*.toml);;All Files (*)")
                 if fname and fname != "":
                     with open(fname, "rb") as f:
-                        Fit2dDic = tomli.load(f)
-                    print(Fit2dDic)
-                    self.fill_param_settings(Fit2dDic)
+                        fit2d_dic = tomli.load(f)
+                    print(fit2d_dic)
+                    self.fill_param_settings(fit2d_dic)
                     _ = self.get_ai()
                     self.disable_params_input()
                     self.set_enable_data_operations(True)
             else:
                 if self.fit2d_mode:
                     self.show_warning_messagebox(
-                        "FIT2d mode is currently set so the image is flipped compared to .poni orientation. Please restart and set no to FIT2d option or proceed with care!")
+                        "FIT2d mode is currently set so the image \
+                            is flipped compared to .poni orientation. \
+                                Please restart and set no to FIT2d option \
+                                    or proceed with care!")
                 fname, _ = QtWidgets.QFileDialog.getOpenFileName(
-                    self, "Select PONI file", "", "PONI (*.poni);;All Files (*)")
+                    self, "Select PONI file", "",
+                    "PONI (*.poni);;All Files (*)")
                 if fname and fname != "":
                     self.ai = pyFAI.load(fname)
-                    Fit2dDic = self.ai.getFit2D()
-                    # print(Fit2dDic)
-                    self.fill_param_settings(Fit2dDic)
+                    fit2d_dic = self.ai.getFit2D()
+                    # print(fit2d_dic)
+                    self.fill_param_settings(fit2d_dic)
                     self.disable_params_input()
                     self.set_enable_data_operations(True)
-        except:
-            self.show_warning_messagebox(
-                "Error in loading file, please check the file and try again")
-        
-    def fill_param_settings(self, Fit2dDic):    
-        self.lineEdit_X.setText(str(Fit2dDic["pixelX"])[0:12])
-        self.lineEdit_Y.setText(str(Fit2dDic["pixelY"])[0:12])
-        # .text(Fit2dDic["directDist"])
-        self.lineEdit_SD.setText(str(Fit2dDic["directDist"])[0:12])
+        except Exception as e:
+            print(e)
+
+    def fill_param_settings(self, fit2d_dic):
+        self.lineEdit_X.setText(str(fit2d_dic["pixelX"])[0:12])
+        self.lineEdit_Y.setText(str(fit2d_dic["pixelY"])[0:12])
+        # .text(fit2d_dic["directDist"])
+        self.lineEdit_SD.setText(str(fit2d_dic["directDist"])[0:12])
         self.lineEdit_wavelength.setText(
-            str(Fit2dDic["waveLength"])[0:12])
-        self.lineEdit_X_dir.setText(str(Fit2dDic["centerX"])[0:12])
+            str(fit2d_dic["waveLength"])[0:12])
+        self.lineEdit_X_dir.setText(str(fit2d_dic["centerX"])[0:12])
         # invert Y below ###############################################
         self.lineEdit_Y_dir.setText(
-            str(Fit2dDic["centerY"])[0:12])  # 2352 -
+            str(fit2d_dic["centerY"])[0:12])  # 2352 -
         #################################################################
         self.lineEdit_rotAngTiltPlane.setText(
-            str(Fit2dDic["tiltPlanRotation"])[0:12])
-        self.lineEdit_angDetTilt.setText(str(Fit2dDic["tilt"])[0:12])
+            str(fit2d_dic["tiltPlanRotation"])[0:12])
+        self.lineEdit_angDetTilt.setText(str(fit2d_dic["tilt"])[0:12])
 
     def disable_params_input(self):
         self.lineEdit_X.setDisabled(True)
@@ -1749,61 +1699,59 @@ class Window(QMainWindow):
         self.lineEdit_angDetTilt.setDisabled(True)
         self.btn_load_PONI.setDisabled(True)
         self.btn_save_PONI.setDisabled(True)
-    
+
     def get_ai(self):
-        Fit2dDic = {}
-        Fit2dDic["pixelX"] = float(self.lineEdit_X.text().strip())
-        Fit2dDic["pixelY"] = float(self.lineEdit_Y.text().strip())
-        Fit2dDic["directDist"] = float(self.lineEdit_SD.text().strip())
-        Fit2dDic["waveLength"] = float(self.lineEdit_wavelength.text().strip())
-        #Fit2dDic["energy"] = plankC * speedLightC / 1000 / \
-        #    float(self.lineEdit_wavelength.text().strip()) / 10_000_000_000
-        Fit2dDic["centerX"] = float(self.lineEdit_X_dir.text().strip())
-        Fit2dDic["centerY"] = float(self.lineEdit_Y_dir.text().strip())
-        Fit2dDic["tiltPlanRotation"] = float(
+        fit2d_dic = {}
+        fit2d_dic["pixelX"] = float(self.lineEdit_X.text().strip())
+        fit2d_dic["pixelY"] = float(self.lineEdit_Y.text().strip())
+        fit2d_dic["directDist"] = float(self.lineEdit_SD.text().strip())
+        fit2d_dic["waveLength"] = float(
+            self.lineEdit_wavelength.text().strip()
+            )
+        fit2d_dic["centerX"] = float(self.lineEdit_X_dir.text().strip())
+        fit2d_dic["centerY"] = float(self.lineEdit_Y_dir.text().strip())
+        fit2d_dic["tiltPlanRotation"] = float(
             self.lineEdit_rotAngTiltPlane.text().strip())
-        Fit2dDic["tilt"] = float(self.lineEdit_angDetTilt.text().strip())
+        fit2d_dic["tilt"] = float(self.lineEdit_angDetTilt.text().strip())
 
         self.ai = azimuthalIntegrator.AzimuthalIntegrator(wavelength=float(
             self.lineEdit_wavelength.text().strip()) / 10_000_000_000)
 
         self.ai.setFit2D(
-            Fit2dDic["directDist"],
-            Fit2dDic["centerX"],
-            Fit2dDic["centerY"],    # 2352 -
-            Fit2dDic["tilt"],
-            Fit2dDic["tiltPlanRotation"],
-            Fit2dDic["pixelX"],
-            Fit2dDic["pixelY"]
+            fit2d_dic["directDist"],
+            fit2d_dic["centerX"],
+            fit2d_dic["centerY"],    # 2352 -
+            fit2d_dic["tilt"],
+            fit2d_dic["tiltPlanRotation"],
+            fit2d_dic["pixelX"],
+            fit2d_dic["pixelY"]
         )
-        return Fit2dDic
+        return fit2d_dic
 
-
-    def click_save_PONI(self):
-
-        plankC = float(4.135667696e-15)
-        speedLightC = float(299_792_458)
+    def click_save_poni(self):
         try:
-            Fit2dDic = self.get_ai()
+            fit2d_dic = self.get_ai()
 
             if self.BL23A_mode:
                 fname, _ = QtWidgets.QFileDialog.getSaveFileName(
-                    self, "Parameter file save name", "", "toml (*.toml);;All Files (*)")
+                    self, "Parameter file save name", "",
+                    "toml (*.toml);;All Files (*)")
                 if fname and fname != "":
                     if os.path.splitext(fname)[1] != ".toml":
                         fname += ".toml"
                     with open(fname, "wb") as f:
-                        tomli_w.dump(Fit2dDic, f)
+                        tomli_w.dump(fit2d_dic, f)
             else:
                 fname, _ = QtWidgets.QFileDialog.getSaveFileName(
-                    self, "Poni file save name", "", "PONI (*.poni);;All Files (*)")
+                    self, "Poni file save name", "",
+                    "PONI (*.poni);;All Files (*)")
 
                 self.ai.write(fname)
             self.disable_params_input()
             self.set_enable_data_operations(True)
 
-        except:
-            self.show_warning_messagebox("Please check your input values!")
+        except Exception as e:
+            print(e)
             return
             # print(self.ai)
             # print(self.ai.getFit2D())
@@ -1826,22 +1774,25 @@ class Window(QMainWindow):
                 data = self.processed_data[item]
                 # if isinstance(data, Data_2d) or isinstance(data, Data_2d_az):
                 return data
-        except:
+        except Exception as e:
             data_2d = None
-            self.show_warning_messagebox("No data selected.")
+            print(e)
             return data_2d
 
     def get_all_selected(self, data_type="all"):
         all_data = []
-        if len(self.listWidget_smp.selectedIndexes()) != 0 and (data_type == "all" or data_type == "smp"):
-            for item in self.listWidget_smp.selectedIndexes():
-                all_data.append(self.sample_data[item.data()])
-        if len(self.listWidget_bkg.selectedIndexes()) != 0 and (data_type == "all" or data_type == "bkg"):
-            for item in self.listWidget_bkg.selectedIndexes():
-                all_data.append(self.background_data[item.data()])
-        if len(self.listWidget_sub.selectedIndexes()) != 0 and (data_type == "all" or data_type == "sub"):
-            for item in self.listWidget_sub.selectedIndexes():
-                all_data.append(self.processed_data[item.data()])
+        if len(self.listWidget_smp.selectedIndexes()) != 0:
+            if (data_type == "all" or data_type == "smp"):
+                for item in self.listWidget_smp.selectedIndexes():
+                    all_data.append(self.sample_data[item.data()])
+        if len(self.listWidget_bkg.selectedIndexes()) != 0:
+            if (data_type == "all" or data_type == "bkg"):
+                for item in self.listWidget_bkg.selectedIndexes():
+                    all_data.append(self.background_data[item.data()])
+        if len(self.listWidget_sub.selectedIndexes()) != 0:
+            if (data_type == "all" or data_type == "sub"):
+                for item in self.listWidget_sub.selectedIndexes():
+                    all_data.append(self.processed_data[item.data()])
         return all_data
 
     def remove_selected(self):
@@ -1888,7 +1839,7 @@ class Window(QMainWindow):
             self.show_image()
         elif isinstance(data, Data_1d) or isinstance(data, Data_1d_az):
             self.tabWidget.setCurrentWidget(self.tab_2)
-            self.plot_1D()
+            self.plot_1d()
 
     def show_image(self):
         data_2d = self.get_first_sel()
@@ -1898,18 +1849,18 @@ class Window(QMainWindow):
             if image is not None:
                 if self.mask is not None:
                     image = self.mask_pix_zero(image)
-                self.plot_2D(image, data_2d.name)
+                self.plot_2d(image, data_2d.name)
                 self.set_plot_image_name(data_2d.name, data_2d.info['type'])
                 self.clear_lists()
             # except:
             #    self.show_warning_messagebox("Image did not pass.")
         elif isinstance(data_2d, Data_2d_az):
-            self.plot_2Daz(data_2d.array, data_2d.name)
+            self.plot_2d_az(data_2d.array, data_2d.name)
             self.set_plot_image_name(data_2d.name, data_2d.info['type'])
             self.clear_lists()
 
         elif isinstance(data_2d, Data_2d_rot):
-            self.plot_2D(data_2d.array, data_2d.name)
+            self.plot_2d(data_2d.array, data_2d.name)
             self.set_plot_image_name(data_2d.name, data_2d.info['type'])
             self.clear_lists()
 
@@ -1931,8 +1882,12 @@ class Window(QMainWindow):
             dlg = QtWidgets.QMessageBox(self)
             dlg.setWindowTitle(
                 "Pixel(s) overflowing, convert to higher bit depth")
-            dlg.setText(str(num_high_pix) + " saturated pixels in image " + name + ". \n Select \"YES\" to set image type to " + str(
-                2*self.bit_depth) + " bit. \n Select \"NO\" to keep 16 bit images and set satureated values to " + str(2**self.bit_depth - 1))
+            dlg.setText(
+                str(num_high_pix) + " saturated pixels in image " + name +
+                ". \n Select \"YES\" to set image type to " + 
+                str(2*self.bit_depth) + " bit. \n Select \"NO\" \
+                    to keep 16 bit images and set satureated values to " +
+                        str(2**self.bit_depth - 1))
             dlg.setStandardButtons(
                 QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No)
             dlg.setIcon(QtWidgets.QMessageBox.Question)
@@ -1946,7 +1901,9 @@ class Window(QMainWindow):
         elif num_high_pix > 0 and self.bit_depth == 32:
             self.set_overflow_pix_saturated(array.copy())
             self.show_warning_messagebox(str(
-                num_high_pix) + " saturated pixels in image, as this is a 32 bit image all saturated pixels will be set to" + str(2**self.bit_depth - 1))
+                    num_high_pix) + " saturated pixels in image, \
+                        all saturated pixels will be set to" +
+                            str(2**self.bit_depth - 1))
             return self.set_overflow_pix_saturated(array.copy())
         else:
             return array
@@ -1978,7 +1935,7 @@ class Window(QMainWindow):
                 self.show_warning_messagebox(
                     'File ' + old_path + ' found, saving to ' + path)
             tifffile.imwrite(path, data.array, dtype=data.array.dtype)
-            
+
         else:
             if not os.path.exists(os.path.join(data.dir, 'batch_reduced')):
                 os.mkdir(os.path.join(data.dir, 'batch_reduced'))
@@ -1987,10 +1944,10 @@ class Window(QMainWindow):
                 "~")[1] + '.' + 'tif')
             tifffile.imwrite(path, data.array, dtype=data.array.dtype)
 
-
     def export_single_dat(self, data):
         if not self.batch_mode:
-            path = os.path.join(data.dir, data.name.split("~")[1] + '.' + data.ext)
+            path = os.path.join(data.dir, data.name.split("~")[1] + '.' +
+                                data.ext)
             if os.path.exists(path):
                 old_path = path
                 path = self.append_file(path)
@@ -2002,10 +1959,10 @@ class Window(QMainWindow):
             if not os.path.exists(os.path.join(data.dir, 'batch_reduced')):
                 os.mkdir(os.path.join(data.dir, 'batch_reduced'))
 
-            path = os.path.join(data.dir, 'batch_reduced', data.name.split("~")[1] + '.' + data.ext)
+            path = os.path.join(data.dir, 'batch_reduced',
+                                data.name.split("~")[1] + '.' + data.ext)
             np.savetxt(path, np.transpose(
                 [data.q, data.I, data.err]), fmt='%1.6e', delimiter='    ')
-
 
     def click_export(self):
 
@@ -2032,7 +1989,7 @@ class Window(QMainWindow):
 
     def append_file(self, path):
         counter = 0
-        basePath = os.path.dirname(path)
+        base_path = os.path.dirname(path)
         ext = os.path.basename(path).split('.')[-1]
         name = Path(path).stem
         if os.path.exists(path):
@@ -2050,19 +2007,15 @@ class Window(QMainWindow):
             while True:
                 counter += 1
 
-                newName = pref + '_' + str(counter)
-                newPath = os.path.join(basePath, newName + '.' + ext)
-                if os.path.exists(newPath):
+                new_name = pref + '_' + str(counter)
+                new_path = os.path.join(base_path, new_name + '.' + ext)
+                if os.path.exists(new_path):
                     continue
                 else:
-                    path = newPath
+                    path = new_path
                     break
         return path
 
-    # @QtCore.pyqtSlot()
-    # def safe_click_rem_outliers(self):
-    #     self.threadmanager.start(self.click_rem_outliers)
-    
     def click_rem_outliers(self):
 
         data_2d_all = self.get_all_selected()
@@ -2082,10 +2035,13 @@ class Window(QMainWindow):
             elif self.comboBox_size.currentText() == "7":
                 size = int(7)
 
-            im_corr = data_2d.remove_outliers(size, float(self.lineEdit_threshold.text()))
+            im_corr = data_2d.remove_outliers(
+                size, float(self.lineEdit_threshold.text())
+                )
 
-            corr_data = {'dir': data_2d.dir, 'ext': data_2d.ext, 'name': "2D~" +
-                         "OLrm_" + data_2d.name.split("~")[1], 'array': im_corr}
+            corr_data = {'dir': data_2d.dir, 'ext': data_2d.ext,
+                            'name': "2D~" + "OLrm_" +
+                                data_2d.name.split("~")[1], 'array': im_corr}
             self.append_data(
                 Data_2d(
                     corr_data['dir'],
@@ -2097,17 +2053,23 @@ class Window(QMainWindow):
                 data_2d.info["type"]
             )
             if self.batch_mode:
-                self.toggle_select_by_string(data_2d.name, data_2d.info["type"], False)
-                self.toggle_select_by_string(corr_data['name'], data_2d.info["type"], True)
+                self.toggle_select_by_string(
+                    data_2d.name, data_2d.info["type"], False
+                    )
+                self.toggle_select_by_string(
+                    corr_data['name'], data_2d.info["type"], True
+                    )
                 QApplication.processEvents()
         if not self.batch_mode:
-            self.plot_2D(im_corr, "2D~" + "OLrm_" + data_2d.name.split("~")[1])
+            self.plot_2d(
+                im_corr, "2D~" + "OLrm_" + data_2d.name.split("~")[1]
+                )
 
         if not self.batch_mode:
             self.clear_lists()
 
-    def plot_1D_1D_data(self, axis, q, I, err, label):
-        axis.errorbar(q, I, yerr=err, label=label)
+    def plot_1d_1d_data(self, axis, q, intensity, err, label):
+        axis.errorbar(q, intensity, yerr=err, label=label)
         # plt.plot(item.q,item.I,label=item.name)
         axis.set_xscale('log')
         axis.set_yscale('log')
@@ -2115,15 +2077,15 @@ class Window(QMainWindow):
         axis.set_ylabel('I(q) [arb. units]')
         axis.legend(fontsize=9)
 
-    def plot_1D_az(self, axis, chi, I, label):
-        axis.plot(chi, I, label=label)
+    def plot_1d_az(self, axis, chi, intensity, label):
+        axis.plot(chi, intensity, label=label)
         axis.set_xscale('linear')
         axis.set_yscale('linear')
         axis.set_xlabel('chi [deg.]')
         axis.set_ylabel('I(q) [arb. units]')
         axis.legend(fontsize=9)
 
-    def plot_1D(self):
+    def plot_1d(self):
         # clearing old figure
         # self.tabWidget.setCurrentIndex(1)
         self.figure2.clear()
@@ -2134,33 +2096,25 @@ class Window(QMainWindow):
         # plot data
         for item in self.get_all_selected():
             if isinstance(item, Data_1d):
-                self.plot_1D_1D_data(
+                self.plot_1d_1d_data(
                     ax2,
                     item.q,
                     item.I,
                     item.err,
                     item.name.split("~")[1]
                 )
-
             elif isinstance(item, Data_1d_az):
-                self.plot_1D_az(
+                self.plot_1d_az(
                     ax2,
                     item.chi,
                     item.I,
                     item.name.split("~")[1]
                 )
 
-        # ax.errorbar(image,cmap="turbo",vmin=0,vmax=self.scale_max) #,norm="log",vmin=0,vmax=self.scale_max
-        # ax.set_position([0.2, 0.2, 0.6, 0.6])
-        # refresh canvas
-        # self.figure.tight_layout(pad=0.4, w_pad=20, h_pad=1.0)
-
-        #
-        # self.figure2.tight_layout()
         self.canvas2.draw()
         self.clear_lists()
 
-    def plot_2Daz(self, image, title):
+    def plot_2d_az(self, image, title):
         self.figure.clear()
 
         # create an axis
@@ -2171,8 +2125,10 @@ class Window(QMainWindow):
                                vmin=np.nanmin(image[0]),
                                vmax=np.nanmax(image[0]))
         # colornorm = 'linear'
-        ax.imshow(image[0], cmap="inferno", extent=[image[1][0].min(), image[1].max(), image[2].min(), image[2].max(
-        )], norm=colornorm, origin='lower')  # ,vmin=0,vmax=self.scale_max,origin='lower') #,norm="log",vmin=0,vmax=self.scale_max
+        ax.imshow(
+            image[0], cmap="inferno", extent=[
+            image[1][0].min(), image[1].max(), image[2].min(), image[2].max()
+            ], norm=colornorm, origin='lower')
         ax.set_title(title)
         ax.set_aspect('auto')
         ax.set_xlabel('q [Ang. ^-1]')
@@ -2187,50 +2143,16 @@ class Window(QMainWindow):
         # self.figure.
         self.canvas.draw()
 
-    '''
-    def bin_ndarray(self,ndarray, new_shape, operation='mean'):
-    
-        if not operation.lower() in ['sum', 'mean', 'average', 'avg']:
-            raise ValueError("Operation {} not supported.".format(operation))
-        if ndarray.ndim != len(new_shape):
-            raise ValueError("Shape mismatch: {} -> {}".format(ndarray.shape,
-                                                            new_shape))
-        compression_pairs = [(d, c//d) for d, c in zip(new_shape,
-                                                    ndarray.shape)]
-        flattened = [l for p in compression_pairs for l in p]
-        ndarray = ndarray.reshape(flattened)
-        for i in range(len(new_shape)):
-            if operation.lower() == "sum":
-                ndarray = ndarray.sum(-1*(i+1))
-            elif operation.lower() in ["mean", "average", "avg"]:
-                ndarray = ndarray.mean(-1*(i+1))
-        return ndarray
-    '''
-
-    def plot_2D(self, image, title):
-        # clearing old figure
-
-        # image = self.bin_ndarray(image, (2,3))
-
-        # main_frame, sub_frame = dectris.albula.display(dectris.albula.DImage(image))
+    def plot_2d(self, image, title):
         self.figure.clear()
-
         colornorm = SymLogNorm(1, base=10,
                                vmin=np.nanmin(image),
                                vmax=np.nanmax(image))
-        # colornorm = 'linear'
-
-        # create an axis
         self.ax = self.figure.add_subplot(111)
         self.get_scale_max(image)
-        # plot data
-        # ,vmin=0,vmax=self.scale_max) #,norm="log",vmin=0,vmax=self.scale_max
+
         self.ax.imshow(image, cmap="inferno", norm=colornorm, origin='lower')
         self.ax.set_title(title)
-        # ax.set_position([0.2, 0.2, 0.6, 0.6])
-        # refresh canvas
-        # self.figure.tight_layout(pad=0.4, w_pad=20, h_pad=1.0)
-        # self.figure.tight_layout()
         self.canvas.draw()
 
     ##########################################
@@ -2270,34 +2192,41 @@ class Window(QMainWindow):
             self.bit_depth = 32
         else:
             self.show_warning_messagebox(
-                'Image appears to be neither a 8, 16, or 32 bit image. This is currently not supported.')
+                'Image appears to be neither a 8, 16, or 32 bit image. \
+                    This is currently not supported.')
 
     def init_image_import(self, array):
         if self.bit_depth is None:
             self.set_bit_depth(array)
             if not self.BL23A_mode:
-                self.show_warning_messagebox("Image bit depth of " + str(self.bit_depth) +
-                                         " found and will be used for writing and manipulating images, please be aware of bit overflow\nMax value for images is " + str(2**self.bit_depth - 1))
+                self.show_warning_messagebox(
+                    "Image bit depth of " + str(self.bit_depth) +
+                        " found and will be used for writing and manipulating\
+                            images, please be aware of bit overflow\n\
+                                Max value for images is " +
+                         str(2**self.bit_depth - 1))
 
         if (self.saturated_pix_mask is False) and \
         (self.auto_mask_saturated_pixels is True):
             self.mask = make_saturated_mask(array, self.bit_depth)
             if not self.BL23A_mode:
-                self.show_warning_messagebox("Masked " + str(np.sum(self.mask)) +
-                                         " saturated pixels which had values of 2^" + str(self.bit_depth) + "-1")
+                self.show_warning_messagebox("Masked " + 
+                        str(np.sum(self.mask)) +
+                        " saturated pixels which had values of 2^" + 
+                        str(self.bit_depth) + "-1")
             self.saturated_pix_mask = True
 
     def import_data(self, data_type):
         # open file dialog returns a tuple
         fnames, _ = QtWidgets.QFileDialog.getOpenFileNames(
             self, "Select multiple files", "", " tif Image (*.tif);;h5 Image (*master.h5);;1D data (*.dat);;All Files (*)")
-        plot_2D_flag = False
+        plot_2d_flag = False
         if not fnames or fnames == "":
             return
 
         for item in fnames:
             if item.split('.')[-1] == "tif":
-                plot_2D_flag = True
+                plot_2d_flag = True
                 data = Data_2d(
                     os.path.dirname(item),
                     os.path.basename(item).split('.')[-1],
@@ -2313,9 +2242,9 @@ class Window(QMainWindow):
                 self.append_data(data, data_type)
 
             if item.split('.')[-1] == "h5":
-                plot_2D_flag = True
+                plot_2d_flag = True
                 if self.monitor_002:
-                    civi, rigi, expTime = self.readHeaderFile(
+                    civi, rigi, exp_time = self.readHeaderFile(
                         os.path.dirname(item), Path(item).stem[0:3])
 
                 imgData = fabio.open(item)
@@ -2334,7 +2263,7 @@ class Window(QMainWindow):
                     if self.monitor_002:
                         dict['info']['civi'] = civi[num]
                         dict['info']['rigi'] = rigi[num]
-                        dict['info']['expTime'] = expTime[num]
+                        dict['info']['expTime'] = exp_time[num]
 
                     data = Data_2d(
                         dict['dir'],
@@ -2347,13 +2276,6 @@ class Window(QMainWindow):
                         data.array = np.flipud(data.array)
                     self.append_data(data, data_type)
                     self.init_image_import(dict['data'].copy())
-                    # if self.bit_depth is None:
-                    #     self.set_bit_depth(data.array)
-
-                    # if self.saturated_pix_mask is False:
-                    #     self.mask = make_saturated_mask(dict['data'].copy())
-                    #     self.show_warning_messagebox("Saturated pixels with value 2^32-1 are masked.")
-                    #     self.saturated_pix_mask = True
 
             elif item.split('.')[-1] == "dat":
                 try:
@@ -2369,11 +2291,10 @@ class Window(QMainWindow):
                         err=raw_data[:, 2]
                     )
                     self.append_data(data, data_type)
-                except:
-                    self.show_warning_messagebox(
-                        "There is likely an issue with the header.")
-        if plot_2D_flag:
-            self.plot_2D(data.array, data.name)
+                except Exception as e:
+                    print(e)
+        if plot_2d_flag:
+            self.plot_2d(data.array, data.name)
             self.set_plot_image_name(data.name, data.info['type'])
 
         self.clear_lists()
@@ -2392,9 +2313,10 @@ class Window(QMainWindow):
         msg.setStandardButtons(QtWidgets.QMessageBox.Ok)
 
         # start the app
-        retval = msg.exec_()
+        msg.exec_()
+        # retval = msg.exec_()
 
-    def subtract_2D(self):
+    def subtract_2d(self):
         # try:
 
         if len(self.listWidget_smp.selectedIndexes()) < 1:
@@ -2406,14 +2328,21 @@ class Window(QMainWindow):
                 "No background selected.", title="Error")
             return
 
-        if len(self.listWidget_bkg.selectedIndexes()) > 1 and len(self.listWidget_bkg.selectedIndexes()) != len(self.listWidget_smp.selectedIndexes()):
-            self.show_warning_messagebox(
-                'number of selected background and samples different. Returning.')
+        if len(self.listWidget_bkg.selectedIndexes()) > 1:
+            if len(
+                self.listWidget_bkg.selectedIndexes()
+                ) != len(
+                self.listWidget_smp.selectedIndexes()
+                ):
+                self.show_warning_messagebox(
+                    'number of selected background and samples different. \
+                        Returning.')
             return
 
         if len(self.listWidget_bkg.selectedIndexes()) > 1:
             self.show_warning_messagebox(
-                'More than one background selected, only one background can be selected to subtract off.')
+                'More than one background selected, only one background \
+                    can be selected to subtract off.')
             return
 
         # except:
@@ -2428,7 +2357,6 @@ class Window(QMainWindow):
 
         for index in self.listWidget_smp.selectedIndexes():
             out = {}
-            # out['path'] = os.path.join(self.sample_data[index.data()].dir,  "subd_" + self.sample_data[index.data()].name)
             out['dir'] = self.sample_data[index.data()].dir
             out['ext'] = self.sample_data[index.data()].ext
             name = self.sample_data[index.data()].name
@@ -2464,72 +2392,17 @@ class Window(QMainWindow):
                 out['array'],
                 out['info']
             )
-            # self.processed_data[out["name"]].info = {"type": "sub","dim": "2D"} # add data type, this is not easy to read
             self.listWidget_sub.addItem(out["name"])
             if self.batch_mode:
                 self.toggle_select_by_string(out["name"], "sub", True)
                 QApplication.processEvents()
-                #self.select_by_filter(out["name"], "sub")
 
-        # plot data
         if not self.batch_mode:
             self.set_plot_image_name(out['name'], out['info']['type'])
-            self.plot_2D(
-            self.processed_data[out["name"]].array, out['name'])
-        
-        # else:
-        #     self.show_warning_messagebox("Can only subtract a single background from multiple samples.")
-            # for count, index in enumerate(self.listWidget_smp.selectedIndexes()):
-            #     bkg_name = self.listWidget_bkg.selectedIndexes()[count].data()
-            #     bkg_data = self.background_data[bkg_name].array
-            #     if self.mask is not None:
-            #         bkg_data = self.mask_pix_zero(bkg_data)
+            self.plot_2d(
+                self.processed_data[out["name"]].array, out['name']
+            )
 
-            #     #bkg_data = self.background_data[bkg_name].array
-            #     out = {}
-            #     # out['path'] = os.path.join(self.sample_data[index.data()].dir,  "subd_" + self.sample_data[index.data()].name)
-            #     out['dir'] = self.sample_data[index.data()].dir
-            #     out['ext'] = self.sample_data[index.data()].ext
-            #     name = self.sample_data[index.data()].name
-            #     out['name'] = name.split(
-            #         "~")[0] + "~" + "subd_" + name.split("~")[1]
-            #     out['name'] = append_name(
-            #         out['name'], self.processed_data)  # add one if exists
-            #     out['info'] = {"type": "sub"}
-            #     if self.mask is not None:
-            #         smp_data = self.mask_pix_zero(
-            #             self.sample_data[index.data()].array)
-            #     else:
-            #         smp_data = self.sample_data[index.data()].array
-
-            #     part1 = np.divide(smp_data, float(self.lineEdit_smp_TM.text()))
-            #     part2 = np.divide(bkg_data, float(self.lineEdit_bkg_TM.text()))
-            #     out['array'] = np.subtract(part1, part2)
-            #     self.processed_data[out["name"]] = Data_2d(
-            #         out['dir'],
-            #         out['ext'],
-            #         out['name'],
-            #         out['array'],
-            #         out['info']
-            #     )
-            #     # add data type, this is not easy to read
-            #     self.processed_data[out["name"]].info = {
-            #         "type": "sub", "dim": "2D"}
-            #     self.listWidget_sub.addItem(out["name"])
-
-            #     if self.batch_mode:
-            #         # select processed item
-            #         self.select_by_filter(out["name"], "sub")
-
-            # # plot data
-            # if not self.batch_mode:
-            #     self.set_plot_image_name(out['name'], out['info']['type'])
-            #     self.plot_2D(
-            #         self.processed_data[out["name"]].array, out['name'])  # here
-
-        # except:
-        #    self.show_warning_messagebox("2d images not compatible.")
-        #    return
         self.tabWidget.setCurrentWidget(self.tab)
         self.listWidget_smp.clearSelection()
         self.listWidget_bkg.clearSelection()

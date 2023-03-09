@@ -3,49 +3,12 @@ This is it
 
 '''
 import cv2
-from time import perf_counter
-import sys 
-import tomli
-import tomli_w
-#sys.path.insert(0, "/opt/dectris/albula/4.1/bin") 
-#sys.path.insert(0, "/opt/dectris/albula/4.1/python") 
-#import dectris.albula
 import numpy as np
-import fabio
 import os
-import tifffile
-import pyFAI
-#import imutils
-#import cv2
 import PIL.Image as IImage
-
-from pyFAI import azimuthalIntegrator
-#from PyQt5 import QtCore, QtGui, QtWidgets
-#from dataclasses import dataclass
-#from matplotlib import pyplot
-from pathlib import Path
-
-#from scipy import ndimage as ndi 
-#from skimage.morphology import disk
-#from skimage import io
-
-
-# adding below for matplotlib
-#from PyQt5.QtWidgets import QDialog, QApplication, QPushButton, QVBoxLayout, QInputDialog
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 import matplotlib.pyplot as plt
 from matplotlib.patches import Arc
 from matplotlib.transforms import IdentityTransform, TransformedBbox, Bbox
-
-from matplotlib.colors import SymLogNorm
-import random
-
-# def combine_masks(eiger_mask, user_mask, reject_mask):
-#     combined_mask = eiger_mask + user_mask + reject_mask
-#     combined_mask[combined_mask > 1] = 1
-#     #combined_mask[combined_mask > 1] = 1
-#     return np.array(combined_mask)
 
 def make_saturated_mask(frame, bit_depth):
     # mask vales are 2^bit_depth-1 
@@ -93,12 +56,12 @@ def append_name(key,dic):
     return key
 
 def readSAXSpar(fname):
-        def makeFIT2dDic():
+        def makefit2d_dic():
             FIT2dParams = {'directBeam': None, 'energy': None, 'beamX': None,
                    'beamY': None, 'tilt': None, 'tiltPlanRotation': None, 'detector': None}
             return FIT2dParams
         
-        FIT2dParams = makeFIT2dDic()
+        FIT2dParams = makefit2d_dic()
         FIT2dParams['detector'] = "eiger9m"
         FIT2dParams['tiltPlanRotation'] = 0.0
         FIT2dParams['tilt'] = 0.0
@@ -543,7 +506,7 @@ class Data_2d:
     
     
     def integrate_image(self, ai, q_bins, chi_start,chi_end, mask, normValue):
-        q, I, err = ai.integrate1d(
+        q, intensity, err = ai.integrate1d(
             self.array,
             q_bins,
             correctSolidAngle=True,
@@ -564,7 +527,7 @@ class Data_2d:
             safe=False, 
             normalization_factor=normValue, 
             metadata=None)
-        return q, I, err
+        return q, intensity, err
 
 
 class Data_2d_az:
@@ -581,12 +544,12 @@ class Data_1d_az:
 
 
     '''
-    def __init__(self,direc,ext,name,chi,I,info) -> None:
+    def __init__(self,direc,ext,name,chi,i,info) -> None:
         self.dir = direc
         self.ext = ext
         self.name = name
         self.chi = chi
-        self.I = I
+        self.intensity = i
         self.info = info
 
 class Data_1d:
@@ -595,11 +558,11 @@ class Data_1d:
 
 
     '''
-    def __init__(self,direc,ext,name,q,I,err,info) -> None:
+    def __init__(self,direc,ext,name,q,i,err,info) -> None:
         self.dir = direc
         self.ext = ext
         self.name = name
         self.q = q
-        self.I = I
+        self.intensity = i
         self.err = err
         self.info = info
