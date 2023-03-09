@@ -1,41 +1,29 @@
 # -*- coding: utf-8 -*-
 
-from utils import (
-   Data_1d,
-   Data_1d_az,
-   Data_2d,
-   Data_2d_az,
-   Data_2d_rot,
-   append_name,
-   AngleAnnotation,
-   make_reject_mask,
-   make_saturated_mask,
-   combine_masks
-)
+import os
+import sys
+from pathlib import Path
+
+import fabio
+import numpy as np
+import pyFAI
+import tifffile
 import tomli
 import tomli_w
-import sys
-import numpy as np
-import fabio
-import os
-import tifffile
-import pyFAI
-from pyFAI import azimuthalIntegrator
-from PyQt5 import QtCore, QtGui, QtWidgets
 from matplotlib import pyplot
-from pathlib import Path
-from PyQt5.QtWidgets import (
-    QWidget,
-    QApplication,
-    QInputDialog,
-    QMenu,
-    QMainWindow
-    )
 from matplotlib.backends.backend_qt5agg import \
     FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import \
     NavigationToolbar2QT as NavigationToolbar
 from matplotlib.colors import SymLogNorm
+from pyFAI import azimuthalIntegrator
+from PyQt5 import QtCore, QtGui, QtWidgets
+from PyQt5.QtWidgets import (QApplication, QInputDialog, QMainWindow, QMenu,
+                             QWidget)
+
+from utils import (AngleAnnotation, Data_1d, Data_1d_az, Data_2d, Data_2d_az,
+                   Data_2d_rot, append_name, combine_masks, make_reject_mask,
+                   make_saturated_mask)
 
 
 class Window(QMainWindow):
