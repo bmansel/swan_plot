@@ -35,7 +35,40 @@ from utils import (
 class Window(QMainWindow):
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.auto_mask_saturated_pixels = False
+        self.monitor_002 = False
+        self.mask = None
+        self.bit_depth = None
+        self.ai = None
+        self.batch_mode = False
+        self.BL23A_mode = True
+        self.sample_data = {}
+        self.background_data = {}
+        self.processed_data = {}
+        #####################################
         self.setup_ui()
+        #####################################
+        if self.BL23A_mode:
+            self.set_bl23a_mode()
+        self.tabWidget.setCurrentIndex(2)
+        self.set_enable_data_operations(False)
+
+        if not self.BL23A_mode:
+            dlg = QtWidgets.QMessageBox(self)
+            dlg.setWindowTitle("Use FIT2d mode?")
+            dlg.setText(
+                "FIT2d uses flipped images, \
+                        select Yes to set FIT2d mode and directly \
+                        enter calibration values outputted from FIT2d. \
+                        Otherwise select No and input a .poni file."
+            )
+            dlg.setStandardButtons(QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No)
+            dlg.setIcon(QtWidgets.QMessageBox.Question)
+            button = dlg.exec()
+            if button == QtWidgets.QMessageBox.Yes:
+                self.fit2d_mode = True
+            else:
+                self.fit2d_mode = False
 
     def setup_ui(self):
         self.setObjectName("MainWindow")
@@ -175,7 +208,7 @@ class Window(QMainWindow):
         self.horizontal_btn_Layout.addWidget(self.lineEdit_smp_filter)
         # list widget
         self.listWidget_smp = QtWidgets.QListWidget(self.verticalLayoutWidget)
-        self.listWidget_smp.setSelectionMode(QtWidgets.QAbstractItemView.MultiSelection)
+        self.listWidget_smp.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
         self.listWidget_smp.setObjectName("listWidget_smp")
         self.verticalLayout.addLayout(self.horizontal_btn_Layout)
         self.verticalLayout.addWidget(self.listWidget_smp)
@@ -233,7 +266,7 @@ class Window(QMainWindow):
         # list widget
         self.listWidget_bkg = QtWidgets.QListWidget(self.verticalLayoutWidget_2)
         self.listWidget_bkg.setObjectName("listWidget_bkg")
-        self.listWidget_bkg.setSelectionMode(QtWidgets.QAbstractItemView.MultiSelection)
+        self.listWidget_bkg.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
         # add horizontal layout to vertical layout
         self.verticalLayout_2.addLayout(self.horizontal_btn_Layout_2)
         self.verticalLayout_2.addWidget(self.listWidget_bkg)
@@ -285,7 +318,7 @@ class Window(QMainWindow):
         # list widget
         self.listWidget_sub = QtWidgets.QListWidget(self.verticalLayoutWidget_3)
         self.listWidget_sub.setObjectName("listWidget_sub")
-        self.listWidget_sub.setSelectionMode(QtWidgets.QAbstractItemView.MultiSelection)
+        self.listWidget_sub.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
         # add horizontal layout to vertical layout
         self.verticalLayout_3.addLayout(self.horizontal_btn_Layout_3)
         self.verticalLayout_3.addWidget(self.listWidget_sub)
@@ -329,7 +362,7 @@ class Window(QMainWindow):
         self.btn_subtract.setFont(font)
 
         self.btn_batch = QtWidgets.QPushButton(
-            self.groupBox, clicked=lambda: self.click_batch_reduce()
+            self.groupBox, clicked=lambda: self.click_batch_process()
         )
         self.btn_batch.setGeometry(QtCore.QRect(816, 190, 96, 25))
         self.btn_batch.setObjectName("btn_batch")
@@ -629,42 +662,17 @@ class Window(QMainWindow):
         ####################################################
         # flags
         ####################################################
-        self.auto_mask_saturated_pixels = False
-        self.monitor_002 = False
-        self.mask = None
-        self.bit_depth = None
-        self.ai = None
-        self.batch_mode = False
-        self.BL23A_mode = True
-        if not self.BL23A_mode:
-            dlg = QtWidgets.QMessageBox(self)
-            dlg.setWindowTitle("Use FIT2d mode?")
-            dlg.setText(
-                "FIT2d uses flipped images, \
-                        select Yes to set FIT2d mode and directly \
-                        enter calibration values outputted from FIT2d. \
-                        Otherwise select No and input a .poni file."
-            )
-            dlg.setStandardButtons(QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No)
-            dlg.setIcon(QtWidgets.QMessageBox.Question)
-            button = dlg.exec()
-            if button == QtWidgets.QMessageBox.Yes:
-                self.fit2d_mode = True
-            else:
-                self.fit2d_mode = False
+        
+        
 
-        self.sample_data = {}
-        self.background_data = {}
-        self.processed_data = {}
-
+        
         self.retranslate_ui()
-        if self.BL23A_mode:
-            self.set_bl23a_mode()
+        
 
         # self.thread_manager = QtCore.QThreadPool()
 
-        self.tabWidget.setCurrentIndex(2)
-        self.set_enable_data_operations(False)
+        
+        
         QtCore.QMetaObject.connectSlotsByName(self)
 
     def retranslate_ui(self):
@@ -790,46 +798,99 @@ class Window(QMainWindow):
             )
             return False
 
-    def click_batch_reduce(self):
+    def click_batch_process(self):
+        '''
+        This does the batch processing of the data.
+
+        '''
         try:
             if self.check_batch_input() is False:
                 print("check batch input failed...")
                 return
             # set batch mode
+                
+            self.batch_smp_1d = []
+            self.batch_smp_2d = []
+            self.batch_bkg_1d = []
+            self.batch_bkg_2d = []
+            self.batch_sub_1d = []
+            self.batch_sub_2d = []
+
             self.groupBox.setEnabled(False)
             self.lbl_pbar.setVisible(True)
             self.pbar.setVisible(True)
             self.lbl_pbar.setText("Batch processing...")
             self.pbar.setValue(0)
-
             self.batch_mode = True
             QApplication.processEvents()
-            self.click_rem_outliers()  # deselects and selects OLR data
+            self.click_rem_outliers()  # now appends to batch_XXX_2d list
             self.lbl_pbar.setText("Removed outliers...1/4")
             self.pbar.setValue(25)
-            QApplication.processEvents()
-            self.click_subtract()
-            self.lbl_pbar.setText("Subtracted...2/4")
+
+            # clear all list widgets
+            self.clear_select_all()
+
+            for item in self.batch_smp_2d:
+                self.toggle_select_by_string(item, "smp", True)
+
+            for item in self.batch_bkg_2d:
+                self.toggle_select_by_string(item, "bkg", True)
+
+            self.click_integrate()    
+            self.clear_select_all()
+            self.lbl_pbar.setText("Integrated...2/4")
             self.pbar.setValue(50)
             QApplication.processEvents()
-            self.tabWidget.setCurrentIndex(1)
-            QApplication.processEvents()
-            self.click_integrate()
-            self.lbl_pbar.setText("Integrated...3/4")
+            if len(self.batch_bkg_2d) > 0:
+                self.toggle_select_by_string(self.batch_bkg_2d[0], "bkg", True)
+                for item in self.batch_smp_2d:
+                    self.toggle_select_by_string(item, "smp", True)
+                self.click_subtract()
+                self.clear_select_all()
+                self.toggle_select_by_string(self.batch_bkg_1d[0], "bkg", True)
+                for item in self.batch_smp_1d:
+                    self.toggle_select_by_string(item, "smp", True)
+                self.click_subtract()
+                self.clear_select_all()
+                self.lbl_pbar.setText("Subtracted...3/4")
+            else:
+                self.lbl_pbar.setText("No subtract...3/4")
             self.pbar.setValue(75)
-            QApplication.processEvents()
-            self.get_first_sel()
+
+            # select all processed data:
+            
+            for item in self.batch_smp_2d:
+                self.toggle_select_by_string(item, "smp", True)
+
+            for item in self.batch_smp_1d:
+                self.toggle_select_by_string(item, "smp", True)
+
+            for item in self.batch_bkg_2d:
+                self.toggle_select_by_string(item, "bkg", True)
+
+            for item in self.batch_bkg_1d:
+                self.toggle_select_by_string(item, "bkg", True)
+            
+            for item in self.batch_sub_2d:
+                self.toggle_select_by_string(item, "sub", True)
+
+            for item in self.batch_sub_1d:
+                self.toggle_select_by_string(item, "sub", True)
+            
             self.click_export()
             self.lbl_pbar.setText("Exported all subtracted...4/4")
             self.pbar.setValue(100)
             self.batch_mode = False
             self.groupBox.setEnabled(True)
-            self.listWidget_sub.clearSelection()
+            self.clear_select_all()
         except Exception as e:
            print(e)
            self.batch_mode = False
            self.groupBox.setEnabled(True)
 
+    
+    
+    
     def toggle_select_by_string(self, string, name, state):
         if name == "smp":
             items = [
@@ -1096,10 +1157,10 @@ class Window(QMainWindow):
         sum_err2 = []
         for item in all_data:
             if len(sum_i) == 0:
-                sum_i = item.I
+                sum_i = item.intensity
                 sum_err2 = np.power(item.err, 2)
             else:
-                sum_i = np.add(sum_i, item.I)
+                sum_i = np.add(sum_i, item.intensity)
                 sum_err2 = np.add(sum_err2, np.power(item.err, 2))
         # check the divide by N or N-1
         return np.divide(sum_i, len(all_data)), np.sqrt(
@@ -1111,10 +1172,10 @@ class Window(QMainWindow):
         sum_err2 = []
         for item in all_data:
             if len(sum_i) == 0:
-                sum_i = item.I
+                sum_i = item.intensity
                 sum_err2 = np.power(item.err, 2)
             else:
-                sum_i = np.add(sum_i, item.I)
+                sum_i = np.add(sum_i, item.intensity)
                 sum_err2 = np.add(sum_err2, np.power(item.err, 2))
         return sum_i, np.sqrt(sum_err2)
 
@@ -1484,6 +1545,7 @@ class Window(QMainWindow):
                         ax2, data.chi, data.intensity, data.name.split("~")[1]
                     )
             self.canvas2.draw()
+            self.tabWidget.setCurrentWidget(self.tab_2)
             self.clear_lists()
 
             # self.plot_2Daz(data.data) # put plotting here
@@ -1569,12 +1631,12 @@ class Window(QMainWindow):
                 return
 
         bkg_name = self.listWidget_bkg.selectedIndexes()[0].data()
-        bkg_data = self.background_data[bkg_name].I
+        bkg_data = self.background_data[bkg_name].intensity
         bkg_err = self.background_data[bkg_name].err
 
         for index in self.listWidget_smp.selectedIndexes():
             part1 = np.divide(
-                self.sample_data[index.data()].I, float(self.lineEdit_smp_TM.text())
+                self.sample_data[index.data()].intensity, float(self.lineEdit_smp_TM.text())
             )
             part2 = np.divide(bkg_data, float(self.lineEdit_bkg_TM.text()))
             err_p1 = np.divide(
@@ -1597,6 +1659,8 @@ class Window(QMainWindow):
 
             self.processed_data[out.name] = out
             self.listWidget_sub.addItem(out.name)
+            if self.batch_mode:
+                self.batch_sub_1d.append(out.name)
 
         self.tabWidget.setCurrentWidget(self.tab_2)
         self.clear_lists()
@@ -1608,6 +1672,12 @@ class Window(QMainWindow):
             title="Error",
         )
 
+    def clear_select_all(self):
+        self.listWidget_smp.clearSelection()
+        self.listWidget_bkg.clearSelection()
+        self.listWidget_sub.clearSelection()
+    
+    
     def click_integrate(self):
         del self.ai
         _ = self.get_ai()
@@ -1652,7 +1722,12 @@ class Window(QMainWindow):
                         new_data.name.split("~")[1],
                     )
                     if self.batch_mode:
-                        self.toggle_select_by_string(new_data.name, "sub", True)
+                        if new_data.info["type"] == "smp":
+                            self.batch_smp_1d.append(new_data.name)
+                        elif new_data.info["type"] == "bkg":
+                            self.batch_bkg_1d.append(new_data.name)
+                        elif new_data.info["type"] == "sub":
+                            self.batch_sub_1d.append(new_data.name)
                         QApplication.processEvents()
 
             self.canvas2.draw()
@@ -1803,6 +1878,9 @@ class Window(QMainWindow):
             return data_2d
 
     def get_all_selected(self, data_type="all"):
+        '''
+        todo update to using list comprehension
+        '''
         all_data = []
         if len(self.listWidget_smp.selectedIndexes()) != 0:
             if data_type == "all" or data_type == "smp":
@@ -1967,11 +2045,11 @@ class Window(QMainWindow):
             tifffile.imwrite(path, data.array, dtype=data.array.dtype)
 
         else:
-            if not os.path.exists(os.path.join(data.dir, "batch_reduced")):
-                os.mkdir(os.path.join(data.dir, "batch_reduced"))
+            if not os.path.exists(os.path.join(data.dir, "batch_processed")):
+                os.mkdir(os.path.join(data.dir, "batch_processed"))
 
             path = os.path.join(
-                data.dir, "batch_reduced", data.name.split("~")[1] + "." + "tif"
+                data.dir, "batch_processed", data.name.split("~")[1] + "." + "tif"
             )
             tifffile.imwrite(path, data.array, dtype=data.array.dtype)
 
@@ -1986,16 +2064,16 @@ class Window(QMainWindow):
                 )
             np.savetxt(
                 path,
-                np.transpose([data.q, data.I, data.err]),
+                np.transpose([data.q, data.intensity, data.err]),
                 fmt="%1.6e",
                 delimiter="    ",
             )
         else:
-            if not os.path.exists(os.path.join(data.dir, "batch_reduced")):
-                os.mkdir(os.path.join(data.dir, "batch_reduced"))
+            if not os.path.exists(os.path.join(data.dir, "batch_processed")):
+                os.mkdir(os.path.join(data.dir, "batch_processed"))
 
             path = os.path.join(
-                data.dir, "batch_reduced", data.name.split("~")[1] + "." + data.ext
+                data.dir, "batch_processed", data.name.split("~")[1] + "." + data.ext
             )
             np.savetxt(
                 path,
@@ -2010,7 +2088,7 @@ class Window(QMainWindow):
                 if isinstance(data, Data_2d):
                     self.export_single_image(data)
                 elif isinstance(data, Data_1d_az):
-                    pass
+                    self.export_1d_az(data)
 
                 elif isinstance(data, Data_1d):
                     self.export_single_dat(data)
@@ -2026,7 +2104,7 @@ class Window(QMainWindow):
                 "File " + old_path + " found, saving to " + path
             )
         np.savetxt(
-            path, np.transpose([data.chi, data.I]), fmt="%1.6e", delimiter="    "
+            path, np.transpose([data.chi, data.intensity]), fmt="%1.6e", delimiter="    "
         )
 
     def append_file(self, path):
@@ -2098,9 +2176,14 @@ class Window(QMainWindow):
             )
             if self.batch_mode:
                 self.toggle_select_by_string(data_2d.name, data_2d.info["type"], False)
-                self.toggle_select_by_string(
-                    corr_data["name"], data_2d.info["type"], True
-                )
+                if data_2d.info["type"] == "smp":
+                    self.batch_smp_2d.append(corr_data["name"])
+                elif data_2d.info["type"] == "bkg":
+                    self.batch_bkg_2d.append(corr_data["name"])
+                
+                # self.toggle_select_by_string(
+                #     corr_data["name"], data_2d.info["type"], True
+                # )
                 QApplication.processEvents()
         if not self.batch_mode:
             self.plot_2d(im_corr, "2D~" + "OLrm_" + data_2d.name.split("~")[1])
@@ -2137,10 +2220,10 @@ class Window(QMainWindow):
         for item in self.get_all_selected():
             if isinstance(item, Data_1d):
                 self.plot_1d_1d_data(
-                    ax2, item.q, item.I, item.err, item.name.split("~")[1]
+                    ax2, item.q, item.intensity, item.err, item.name.split("~")[1]
                 )
             elif isinstance(item, Data_1d_az):
-                self.plot_1d_az(ax2, item.chi, item.I, item.name.split("~")[1])
+                self.plot_1d_az(ax2, item.chi, item.intensity, item.name.split("~")[1])
 
         self.canvas2.draw()
         self.clear_lists()
@@ -2183,7 +2266,7 @@ class Window(QMainWindow):
         self.ax = self.figure.add_subplot(111)
         self.get_scale_max(image)
 
-        self.ax.imshow(image, cmap="inferno", norm=colornorm, origin="lower")
+        self.ax.imshow(image, cmap="inferno", norm=colornorm, origin="lower",interpolation="none")
         self.ax.set_title(title)
         self.canvas.draw()
 
@@ -2433,7 +2516,7 @@ class Window(QMainWindow):
             )
             self.listWidget_sub.addItem(out["name"])
             if self.batch_mode:
-                self.toggle_select_by_string(out["name"], "sub", True)
+                self.batch_sub_2d.append(out["name"])
                 QApplication.processEvents()
 
         if not self.batch_mode:

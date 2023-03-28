@@ -439,7 +439,12 @@ class Data_2d:
     def remove_outliers(self, radius, threshold):
         # footprint_function = disk
         # footprint = footprint_function(radius=radius)
-        median_filtered = cv2.medianBlur(self.array, int(radius))
+        print(self.array.dtype)
+        if self.array.dtype == 'uint32':
+            median_filtered = cv2.medianBlur(self.array.astype('f'), int(radius))
+            median_filtered = np.array(median_filtered, dtype='uint')
+        else:
+            median_filtered = cv2.medianBlur(self.array, int(radius))
         # median_filtered = ndi.median_filter(self.array, footprint=footprint)
         # Bright  and dark:
         # outliers = (image > median_filtered + threshold) | (image < median_filtered - threshold)
