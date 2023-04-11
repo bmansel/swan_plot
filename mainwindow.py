@@ -3,20 +3,25 @@
 import os
 import sys
 from pathlib import Path
-
+import time
 import fabio
 import numpy as np
 import pyFAI
 import tifffile
 import tomli
 import tomli_w
+from time import perf_counter
+import gc
+#import traceback
 from matplotlib import pyplot
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 from matplotlib.colors import SymLogNorm
 from pyFAI import azimuthalIntegrator
 from PyQt5 import QtCore, QtGui, QtWidgets
-from PyQt5.QtWidgets import QApplication, QInputDialog, QMainWindow, QMenu, QWidget
+from PyQt5.QtCore import QThread, pyqtSignal
+from PyQt5.QtWidgets import QApplication, QInputDialog, QMainWindow, QMenu, QWidget, QProgressDialog
+#from PyQt5.QtCore import pyqtSlot
 
 from utils import (
     AngleAnnotation,
@@ -29,12 +34,22 @@ from utils import (
     combine_masks,
     make_reject_mask,
     make_saturated_mask,
+    WorkerImportData,
+    WorkerIntegrateData,
+    WorkerRemoveOutliers,
+    Worker,
+    import_data,
+    ProgressDialog
 )
 
-
 class Window(QMainWindow):
+
+    cancel_signal = pyqtSignal(bool)
+
     def __init__(self, parent=None):
         super().__init__(parent)
+        #self.threadpool = QtCore.QThreadPool()
+        #print("Multithreading with maximum %d threads" % self.threadpool.maxThreadCount())
         self.auto_mask_saturated_pixels = False
         self.monitor_002 = False
         self.mask = None
@@ -44,7 +59,7 @@ class Window(QMainWindow):
         self.BL23A_mode = True
         self.sample_data = {}
         self.background_data = {}
-        self.processed_data = {}
+        self.subtracted_data = {}
         #####################################
         self.setup_ui()
         #####################################
@@ -73,6 +88,7 @@ class Window(QMainWindow):
     def setup_ui(self):
         self.setObjectName("MainWindow")
         self.resize(1000, 900)
+        self.setMinimumSize(1000, 900)
         #####################################################################
         # not needed on linux etc
         # myappid = u'LFP_reduction'
@@ -81,8 +97,10 @@ class Window(QMainWindow):
         self.setWindowIcon(QtGui.QIcon("../images/icon.png"))
         self.centralWidget = QWidget()
         self.setCentralWidget(self.centralWidget)
+        self.gridLayout_2 = QtWidgets.QGridLayout(self.centralWidget)
         self.grpBx_TM = QtWidgets.QGroupBox(self.centralWidget)
         self.grpBx_TM.setGeometry(QtCore.QRect(20, 20, 541, 71))
+        self.grpBx_TM.setMaximumSize(QtCore.QSize(541, 71))
         font = QtGui.QFont()
         font.setStyleName("Microsoft Sans Serif")
         font.setPointSize(12)
@@ -90,6 +108,7 @@ class Window(QMainWindow):
         font.setWeight(75)
         self.grpBx_TM.setFont(font)
         self.grpBx_TM.setObjectName("grpBx_TM")
+        self.gridLayout_2.addWidget(self.grpBx_TM, 0, 0, 1, 1)
         self.gridLayoutWidget = QtWidgets.QWidget(self.grpBx_TM)
         self.gridLayoutWidget.setGeometry(QtCore.QRect(0, 30, 541, 33))
         self.gridLayoutWidget.setObjectName("gridLayoutWidget")
@@ -144,6 +163,7 @@ class Window(QMainWindow):
 
         self.groupBox = QtWidgets.QGroupBox(self.centralWidget)
         self.groupBox.setGeometry(QtCore.QRect(20, 100, 951, 771))
+        self.groupBox.setMinimumSize(QtCore.QSize(951, 771))
         font = QtGui.QFont()
         font.setStyleName("Microsoft Sans Serif")
         font.setPointSize(15)
@@ -151,6 +171,7 @@ class Window(QMainWindow):
         font.setWeight(75)
         self.groupBox.setFont(font)
         self.groupBox.setObjectName("groupBox")
+        self.gridLayout_2.addWidget(self.groupBox, 1, 0, 1, 1)
         self.horizontalLayoutWidget = QtWidgets.QWidget(self.groupBox)
         self.horizontalLayoutWidget.setGeometry(QtCore.QRect(0, 20, 951, 171))
         self.horizontalLayoutWidget.setObjectName("horizontalLayoutWidget")
@@ -177,7 +198,7 @@ class Window(QMainWindow):
         self.horizontal_btn_Layout.setObjectName("horizontal_btn_Layout")
         # import button
         self.btn_import_smp = QtWidgets.QPushButton(
-            self.verticalLayoutWidget, clicked=lambda: self.import_data("smp")
+            self.verticalLayoutWidget, clicked=lambda: self.click_import_data("smp")
         )
         font = QtGui.QFont()
         font.setStyleName("Microsoft Sans Serif")
@@ -233,7 +254,7 @@ class Window(QMainWindow):
         self.horizontal_btn_Layout_2.setObjectName("horizontal_btn_Layout_2")
         # import button
         self.btn_import_bkg = QtWidgets.QPushButton(
-            self.verticalLayoutWidget_2, clicked=lambda: self.import_data("bkg")
+            self.verticalLayoutWidget_2, clicked=lambda: self.click_import_data("bkg")
         )
         font = QtGui.QFont()
         font.setStyleName("Microsoft Sans Serif")
@@ -291,7 +312,7 @@ class Window(QMainWindow):
         self.horizontal_btn_Layout.setObjectName("horizontal_btn_Layout_3")
         # import button
         self.btn_import_subd = QtWidgets.QPushButton(
-            self.verticalLayoutWidget_3, clicked=lambda: self.import_data("sub")
+            self.verticalLayoutWidget_3, clicked=lambda: self.click_import_data("sub")
         )
         font = QtGui.QFont()
         font.setStyleName("Microsoft Sans Serif")
@@ -803,90 +824,97 @@ class Window(QMainWindow):
         This does the batch processing of the data.
 
         '''
-        try:
-            if self.check_batch_input() is False:
-                print("check batch input failed...")
-                return
-            # set batch mode
-                
-            self.batch_smp_1d = []
-            self.batch_smp_2d = []
-            self.batch_bkg_1d = []
-            self.batch_bkg_2d = []
-            self.batch_sub_1d = []
-            self.batch_sub_2d = []
-
-            self.groupBox.setEnabled(False)
-            self.lbl_pbar.setVisible(True)
-            self.pbar.setVisible(True)
-            self.lbl_pbar.setText("Batch processing...")
-            self.pbar.setValue(0)
-            self.batch_mode = True
-            QApplication.processEvents()
-            self.click_rem_outliers()  # now appends to batch_XXX_2d list
-            self.lbl_pbar.setText("Removed outliers...1/4")
-            self.pbar.setValue(25)
-
-            # clear all list widgets
-            self.clear_select_all()
-
-            for item in self.batch_smp_2d:
-                self.toggle_select_by_string(item, "smp", True)
-
-            for item in self.batch_bkg_2d:
-                self.toggle_select_by_string(item, "bkg", True)
-
-            self.click_integrate()    
-            self.clear_select_all()
-            self.lbl_pbar.setText("Integrated...2/4")
-            self.pbar.setValue(50)
-            QApplication.processEvents()
-            if len(self.batch_bkg_2d) > 0:
-                self.toggle_select_by_string(self.batch_bkg_2d[0], "bkg", True)
-                for item in self.batch_smp_2d:
-                    self.toggle_select_by_string(item, "smp", True)
-                self.click_subtract()
-                self.clear_select_all()
-                self.toggle_select_by_string(self.batch_bkg_1d[0], "bkg", True)
-                for item in self.batch_smp_1d:
-                    self.toggle_select_by_string(item, "smp", True)
-                self.click_subtract()
-                self.clear_select_all()
-                self.lbl_pbar.setText("Subtracted...3/4")
-            else:
-                self.lbl_pbar.setText("No subtract...3/4")
-            self.pbar.setValue(75)
-
-            # select all processed data:
+        # try:
+        if self.check_batch_input() is False:
+            print("check batch input failed...")
+            return
+        # set batch mode
             
+        self.batch_smp_1d = []
+        self.batch_smp_2d = []
+        self.batch_bkg_1d = []
+        self.batch_bkg_2d = []
+        self.batch_sub_1d = []
+        self.batch_sub_2d = []
+
+        self.groupBox.setEnabled(False)
+        self.lbl_pbar.setVisible(True)
+        self.pbar.setVisible(True)
+        self.lbl_pbar.setText("Batch processing...")
+        self.pbar.setValue(0)
+        self.batch_mode = True
+        QApplication.processEvents()
+        self.click_rem_outliers()  # now appends to batch_XXX_2d list
+        while not self.finished:
+            QApplication.processEvents()
+            time.sleep(0.1)
+
+        self.lbl_pbar.setText("Removed outliers...1/4")
+        self.pbar.setValue(25)
+
+        # clear all list widgets
+        self.clear_lists()
+
+        for item in self.batch_smp_2d:
+            self.toggle_select_by_string(item, "smp", True)
+
+        for item in self.batch_bkg_2d:
+            self.toggle_select_by_string(item, "bkg", True)
+
+        self.click_integrate() 
+        while not self.finished:
+            QApplication.processEvents()
+            time.sleep(0.1)   
+        self.clear_lists()
+        self.lbl_pbar.setText("Integrated...2/4")
+        self.pbar.setValue(50)
+        QApplication.processEvents()
+        if len(self.batch_bkg_2d) > 0:
+            self.toggle_select_by_string(self.batch_bkg_2d[0], "bkg", True)
             for item in self.batch_smp_2d:
                 self.toggle_select_by_string(item, "smp", True)
-
+            self.click_subtract()
+            self.clear_lists()
+            self.toggle_select_by_string(self.batch_bkg_1d[0], "bkg", True)
             for item in self.batch_smp_1d:
                 self.toggle_select_by_string(item, "smp", True)
+            self.click_subtract()
+            self.clear_lists()
+            self.lbl_pbar.setText("Subtracted...3/4")
+        else:
+            self.lbl_pbar.setText("No subtract...3/4")
+        self.pbar.setValue(75)
 
-            for item in self.batch_bkg_2d:
-                self.toggle_select_by_string(item, "bkg", True)
+        # select all processed data:
+        
+        for item in self.batch_smp_2d:
+            self.toggle_select_by_string(item, "smp", True)
 
-            for item in self.batch_bkg_1d:
-                self.toggle_select_by_string(item, "bkg", True)
-            
-            for item in self.batch_sub_2d:
-                self.toggle_select_by_string(item, "sub", True)
+        for item in self.batch_smp_1d:
+            self.toggle_select_by_string(item, "smp", True)
 
-            for item in self.batch_sub_1d:
-                self.toggle_select_by_string(item, "sub", True)
-            
-            self.click_export()
-            self.lbl_pbar.setText("Exported all subtracted...4/4")
-            self.pbar.setValue(100)
-            self.batch_mode = False
-            self.groupBox.setEnabled(True)
-            self.clear_select_all()
-        except Exception as e:
-           print(e)
-           self.batch_mode = False
-           self.groupBox.setEnabled(True)
+        for item in self.batch_bkg_2d:
+            self.toggle_select_by_string(item, "bkg", True)
+
+        for item in self.batch_bkg_1d:
+            self.toggle_select_by_string(item, "bkg", True)
+        
+        for item in self.batch_sub_2d:
+            self.toggle_select_by_string(item, "sub", True)
+
+        for item in self.batch_sub_1d:
+            self.toggle_select_by_string(item, "sub", True)
+        
+        self.click_export()
+        self.lbl_pbar.setText("Exported all subtracted...4/4")
+        self.pbar.setValue(100)
+        self.batch_mode = False
+        self.groupBox.setEnabled(True)
+        self.clear_lists()
+        # except Exception as e:
+        #    print(e)
+        #    self.batch_mode = False
+        #    self.groupBox.setEnabled(True)
 
     
     
@@ -1053,7 +1081,7 @@ class Window(QMainWindow):
         elif data_type == "bkg":
             return self.background_data
         elif data_type == "sub":
-            return self.processed_data
+            return self.subtracted_data
 
     def click_sum_data(self):
         for data_type in ["smp", "bkg", "sub"]:
@@ -1074,7 +1102,7 @@ class Window(QMainWindow):
                     new_data.array = self.check_overflow_pix(
                         new_data.array, new_data.name
                     )
-                    self.append_data(new_data, data_type)
+                    self.append_data(new_data)
                 elif data_dim == "one_dim":
                     intensity, err = self.sum_1d(all_data)
                     new_data = Data_1d(
@@ -1089,7 +1117,7 @@ class Window(QMainWindow):
                         err,
                         all_data[0].info,
                     )
-                    self.append_data(new_data, data_type)
+                    self.append_data(new_data)
                 else:
                     pass
 
@@ -1109,7 +1137,7 @@ class Window(QMainWindow):
                         np.divide(self.sum_2d(all_data), len(all_data)),
                         all_data[0].info,
                     )
-                    self.append_data(new_data, data_type)
+                    self.append_data(new_data)
                 elif data_dim == "one_dim":
                     intensity, err = self.avg_1d(all_data)
                     new_data = Data_1d(
@@ -1124,7 +1152,7 @@ class Window(QMainWindow):
                         np.divide(err, len(all_data)),
                         all_data[0].info,
                     )
-                    self.append_data(new_data, data_type)
+                    self.append_data(new_data)
                 else:
                     pass
 
@@ -1286,7 +1314,7 @@ class Window(QMainWindow):
                     err,
                     {"type": data.info["type"]},
                 )
-                self.append_data(new_data, new_data.info["type"])
+                self.append_data(new_data)
                 self.plot_1d_1d_data(
                     ax2,
                     new_data.q,
@@ -1315,7 +1343,7 @@ class Window(QMainWindow):
                     intensity,
                     {"type": item.info["type"]},
                 )
-                self.append_data(data, data.info["type"])
+                self.append_data(data)
                 self.plot_1d_az(ax2, data.chi, data.intensity, data.name.split("~")[1])
                 self.tabWidget.setCurrentWidget(self.tab_2)
 
@@ -1342,8 +1370,7 @@ class Window(QMainWindow):
                 # print(rotd_img)
                 name = "2d_rot_" + data.name.split("~")[1]
                 self.append_data(
-                    Data_2d_rot(data.dir, data.ext, name, rotd_img, data.info),
-                    data.info["type"],
+                    Data_2d_rot(data.dir, data.ext, name, rotd_img, data.info)
                 )
                 self.set_plot_image_name(name, data.info["type"])
                 self.plot_2d(rotd_img, name)
@@ -1506,14 +1533,14 @@ class Window(QMainWindow):
                 )
                 if ok and new_name != "":
                     split_name = old_name.split("~")[0] + "~" + new_name
-                    if split_name in self.processed_data:
+                    if split_name in self.subtracted_data:
                         self.show_warning_messagebox("Name already exists, try again.")
                         return
                     new_name = old_name.split("~")[0] + "~" + new_name
                     item.setText(new_name)
-                    self.processed_data[old_name].name = new_name
-                    self.processed_data[new_name] = self.processed_data[old_name]
-                    del self.processed_data[old_name]
+                    self.subtracted_data[old_name].name = new_name
+                    self.subtracted_data[new_name] = self.subtracted_data[old_name]
+                    del self.subtracted_data[old_name]
         self.clear_lists()
 
     def click_integrate_radial(self):
@@ -1540,7 +1567,7 @@ class Window(QMainWindow):
                         intensity,
                         {"type": item.info["type"]},
                     )
-                    self.append_data(data, data.info["type"])
+                    self.append_data(data)
                     self.plot_1d_az(
                         ax2, data.chi, data.intensity, data.name.split("~")[1]
                     )
@@ -1594,7 +1621,7 @@ class Window(QMainWindow):
                         az_image,
                         {"type": item.info["type"], "dim": "2D"},
                     )
-                    self.append_data(data, data.info["type"])
+                    self.append_data(data)
                     self.set_plot_image_name(data.name, data.info["type"])
                     self.plot_2d_az(data.array, data.name)
 
@@ -1646,7 +1673,7 @@ class Window(QMainWindow):
 
             name = self.sample_data[index.data()].name
             name = "1D~" + "subd_" + name.split("~")[1]
-            name = append_name(name, self.processed_data)
+            name = append_name(name, self.subtracted_data)
             out = Data_1d(
                 self.sample_data[index.data()].dir,
                 "dat",
@@ -1657,7 +1684,7 @@ class Window(QMainWindow):
                 {"type": "sub", "dim": "1D"},
             )
 
-            self.processed_data[out.name] = out
+            self.subtracted_data[out.name] = out
             self.listWidget_sub.addItem(out.name)
             if self.batch_mode:
                 self.batch_sub_1d.append(out.name)
@@ -1671,14 +1698,9 @@ class Window(QMainWindow):
                 input a .poni file or information from fit 2d",
             title="Error",
         )
-
-    def clear_select_all(self):
-        self.listWidget_smp.clearSelection()
-        self.listWidget_bkg.clearSelection()
-        self.listWidget_sub.clearSelection()
-    
     
     def click_integrate(self):
+        
         del self.ai
         _ = self.get_ai()
         if self.ai is None:
@@ -1686,54 +1708,90 @@ class Window(QMainWindow):
         else:
             self.figure2.clear()
             ax2 = self.figure2.add_subplot(111)
-            for data in self.get_all_selected():
-                if isinstance(data, Data_2d):
-                    if data.info["type"] == "smp":
-                        norm_value = float(self.lineEdit_smp_TM.text().strip())
-                    elif data.info["type"] == "bkg":
-                        norm_value = float(self.lineEdit_bkg_TM.text().strip())
-                    else:
-                        norm_value = 1
-                    if self.monitor_002:
-                        norm_value *= data.info["civi"]
-                    q, intensity, err = data.integrate_image(
-                        self.ai,
-                        self.sb_q_bins.value(),
-                        self.dsb_chi_start.value(),
-                        self.dsb_chi_end.value(),
-                        self.mask,
-                        norm_value / self.dsb_scale_factor.value(),
-                    )
-                    new_data = Data_1d(
-                        data.dir,
-                        "dat",
-                        "1D~" + data.name.split("~")[1],
-                        q,
-                        intensity,
-                        err,
-                        {"type": data.info["type"]},
-                    )
-                    self.append_data(new_data, new_data.info["type"])
-                    self.plot_1d_1d_data(
-                        ax2,
-                        new_data.q,
-                        new_data.intensity,
-                        new_data.err,
-                        new_data.name.split("~")[1],
-                    )
-                    if self.batch_mode:
-                        if new_data.info["type"] == "smp":
-                            self.batch_smp_1d.append(new_data.name)
-                        elif new_data.info["type"] == "bkg":
-                            self.batch_bkg_1d.append(new_data.name)
-                        elif new_data.info["type"] == "sub":
-                            self.batch_sub_1d.append(new_data.name)
-                        QApplication.processEvents()
+            
+            temp = self.get_names_types_selected()
 
-            self.canvas2.draw()
-            if not self.batch_mode:
-                self.clear_lists()
-                self.tabWidget.setCurrentWidget(self.tab_2)
+            names_types = []
+            for item in temp:
+                if item[1] == "smp":
+                    if isinstance(self.sample_data[item[0]], Data_2d):
+                        names_types.append(item)
+                elif item[1] == "bkg":
+                    if isinstance(self.background_data[item[0]], Data_2d):
+                        names_types.append(item)
+                else:
+                    if isinstance(self.subtracted_data[item[0]], Data_2d):
+                        names_types.append(item)
+            
+            self.wid = WorkerIntegrateData(
+                self.ai,
+                self.sample_data,
+                self.background_data,
+                self.subtracted_data,
+                names_types,
+                self.sb_q_bins.value(),
+                self.dsb_chi_start.value(),
+                self.dsb_chi_end.value(),
+                self.mask,
+                float(self.lineEdit_smp_TM.text().strip()),
+                float(self.lineEdit_bkg_TM.text().strip()),
+                self.batch_mode,
+                self.monitor_002
+            )
+            self.finished = False
+            self.wid.start()
+            self.wid.export_data.connect(self.append_data)
+            self.wid.batchmode_data.connect(self.evt_update_batchmode_data)
+            self.wid.data_name.connect(self.evt_update_pbar_label)
+            self.wid.finished.connect(self.evt_finished)
+            # for data in self.get_all_selected():
+            #     if isinstance(data, Data_2d):
+            #         if data.info["type"] == "smp":
+            #             norm_value = float(self.lineEdit_smp_TM.text().strip())
+            #         elif data.info["type"] == "bkg":
+            #             norm_value = float(self.lineEdit_bkg_TM.text().strip())
+            #         else:
+            #             norm_value = 1
+            #         if self.monitor_002:
+            #             norm_value *= data.info["civi"]
+                #     q, intensity, err = data.integrate_image(
+                #         self.ai,
+                #         self.sb_q_bins.value(),
+                #         self.dsb_chi_start.value(),
+                #         self.dsb_chi_end.value(),
+                #         self.mask,
+                #         norm_value / self.dsb_scale_factor.value(),
+                #     )
+                #     new_data = Data_1d(
+                #         data.dir,
+                #         "dat",
+                #         "1D~" + data.name.split("~")[1],
+                #         q,
+                #         intensity,
+                #         err,
+                #         {"type": data.info["type"]},
+                #     )
+                #     self.append_data(new_data)
+                #     self.plot_1d_1d_data(
+                #         ax2,
+                #         new_data.q,
+                #         new_data.intensity,
+                #         new_data.err,
+                #         new_data.name.split("~")[1],
+                #     )
+                #     if self.batch_mode:
+                #         if new_data.info["type"] == "smp":
+                #             self.batch_smp_1d.append(new_data.name)
+                #         elif new_data.info["type"] == "bkg":
+                #             self.batch_bkg_1d.append(new_data.name)
+                #         elif new_data.info["type"] == "sub":
+                #             self.batch_sub_1d.append(new_data.name)
+                #         QApplication.processEvents()
+
+            # self.canvas2.draw()
+            # if not self.batch_mode:
+            #     self.clear_lists()
+            #     self.tabWidget.setCurrentWidget(self.tab_2)
 
     def click_load_poni(self):
         try:
@@ -1869,7 +1927,7 @@ class Window(QMainWindow):
                 return data
             if len(self.listWidget_sub.selectedIndexes()) != 0:
                 item = self.listWidget_sub.selectedIndexes()[0].data()
-                data = self.processed_data[item]
+                data = self.subtracted_data[item]
                 # if isinstance(data, Data_2d) or isinstance(data, Data_2d_az):
                 return data
         except Exception as e:
@@ -1877,6 +1935,23 @@ class Window(QMainWindow):
             print(e)
             return data_2d
 
+    def get_names_types_selected(self, data_type="all"):
+        all_names = []
+        if len(self.listWidget_smp.selectedIndexes()) != 0:
+            if data_type == "all" or data_type == "smp":
+                for item in self.listWidget_smp.selectedIndexes():
+                    all_names.append((item.data(), "smp"))
+        if len(self.listWidget_bkg.selectedIndexes()) != 0:
+            if data_type == "all" or data_type == "bkg":
+                for item in self.listWidget_bkg.selectedIndexes():
+                    all_names.append((item.data(), "bkg"))
+        if len(self.listWidget_sub.selectedIndexes()) != 0:
+            if data_type == "all" or data_type == "sub":
+                for item in self.listWidget_sub.selectedIndexes():
+                    all_names.append((item.data(), "sub"))
+        return all_names
+    
+    
     def get_all_selected(self, data_type="all"):
         '''
         todo update to using list comprehension
@@ -1893,7 +1968,7 @@ class Window(QMainWindow):
         if len(self.listWidget_sub.selectedIndexes()) != 0:
             if data_type == "all" or data_type == "sub":
                 for item in self.listWidget_sub.selectedIndexes():
-                    all_data.append(self.processed_data[item.data()])
+                    all_data.append(self.subtracted_data[item.data()])
         return all_data
 
     def remove_selected(self):
@@ -1902,16 +1977,20 @@ class Window(QMainWindow):
             item = self.listWidget_smp.selectedIndexes()[0]
             del self.sample_data[item.data()]
             self.listWidget_smp.takeItem(item.row())
+            
 
         while len(self.listWidget_bkg.selectedIndexes()) > 0:
             item = self.listWidget_bkg.selectedIndexes()[0]
             del self.background_data[item.data()]
             self.listWidget_bkg.takeItem(item.row())
+            
 
         while len(self.listWidget_sub.selectedIndexes()) > 0:
             item = self.listWidget_sub.selectedIndexes()[0]
-            del self.processed_data[item.data()]
+            del self.subtracted_data[item.data()]
             self.listWidget_sub.takeItem(item.row())
+            
+        gc.collect()
 
     def set_plot_image_name(self, name, img_type):
         self.plt_info = (name, img_type)
@@ -1921,12 +2000,12 @@ class Window(QMainWindow):
     def get_plot_image_data(self):
         # print( self.plt_info[1])
         if self.plt_info[1] == "smp":
-            # print(self.sample_data[self.plt_info[0]])
+            # print(sample_data[self.plt_info[0]])
             return self.sample_data[self.plt_info[0]]
         elif self.plt_info[1] == "bkg":
             return self.background_data[self.plt_info[0]]
         else:
-            return self.processed_data[self.plt_info[0]]
+            return self.subtracted_data[self.plt_info[0]]
 
     def click_show_data(self):
         data = self.get_first_sel()
@@ -1943,8 +2022,12 @@ class Window(QMainWindow):
             self.tabWidget.setCurrentWidget(self.tab_2)
             self.plot_1d()
 
-    def show_image(self):
-        data_2d = self.get_first_sel()
+    def show_image(self, data = None):
+        if data is None:
+            data_2d = self.get_first_sel()
+        else:
+            data_2d = data
+        
         if isinstance(data_2d, Data_2d):
             image = data_2d.array
             # try:
@@ -2136,60 +2219,75 @@ class Window(QMainWindow):
                     break
         return path
 
+    def evt_update_batchmode_data(self, data):
+        self.toggle_select_by_string(data, data.info["type"], False)
+        if data.info["type"] == "smp" and isinstance(data, Data_2d):
+            self.batch_smp_2d.append(data.name)
+        elif data.info["type"] == "bkg" and isinstance(data, Data_2d):
+            self.batch_bkg_2d.append(data.name)
+        elif data.info["type"] == "smp" and isinstance(data, Data_1d):
+            self.batch_smp_1d.append(data.name)
+        elif data.info["type"] == "bkg" and isinstance(data, Data_1d):
+            self.batch_bkg_1d.append(data.name)
+
+    
     def click_rem_outliers(self):
-        data_2d_all = self.get_all_selected()
+        # if we have a large number selected we copy these to a new list??
+        # this is not needed...
+        temp = self.get_names_types_selected()
+        names_types = []
+        for item in temp:
+            if item[1] == "smp":
+                if isinstance(self.sample_data[item[0]], Data_2d):
+                    names_types.append(item)
+            elif item[1] == "bkg":
+                if isinstance(self.background_data[item[0]], Data_2d):
+                    names_types.append(item)
+            else:
+                if isinstance(self.subtracted_data[item[0]], Data_2d):
+                    names_types.append(item)
+    
+        #data_2d_all = self.get_all_selected()
 
-        for data_2d in data_2d_all:
-            if not isinstance(data_2d, Data_2d):
-                data_2d_all.remove(data_2d)
+        # for data_2d in data_2d_all:
+        #     if not isinstance(data_2d, Data_2d):
+        #         data_2d_all.remove(data_2d)
 
-        if not data_2d_all:
-            self.show_warning_messagebox("No 2d data selected.")
+        # if not data_2d_all:
+        #     self.show_warning_messagebox("No 2d data selected.")
 
-        for data_2d in data_2d_all:
-            if self.comboBox_size.currentText() == "3":
-                size = int(3)
-            elif self.comboBox_size.currentText() == "5":
-                size = int(5)
-            elif self.comboBox_size.currentText() == "7":
-                size = int(7)
-
-            im_corr = data_2d.remove_outliers(
-                size, float(self.lineEdit_threshold.text())
-            )
-
-            corr_data = {
-                "dir": data_2d.dir,
-                "ext": data_2d.ext,
-                "name": "2D~" + "OLrm_" + data_2d.name.split("~")[1],
-                "array": im_corr,
-            }
-            self.append_data(
-                Data_2d(
-                    corr_data["dir"],
-                    corr_data["ext"],
-                    corr_data["name"],
-                    corr_data["array"],
-                    data_2d.info,
-                ),
-                data_2d.info["type"],
-            )
-            if self.batch_mode:
-                self.toggle_select_by_string(data_2d.name, data_2d.info["type"], False)
-                if data_2d.info["type"] == "smp":
-                    self.batch_smp_2d.append(corr_data["name"])
-                elif data_2d.info["type"] == "bkg":
-                    self.batch_bkg_2d.append(corr_data["name"])
-                
+        if self.comboBox_size.currentText() == "3":
+            size = int(3)
+        elif self.comboBox_size.currentText() == "5":
+            size = int(5)
+        
+        threshold = float(self.lineEdit_threshold.text())
+        self.wro = WorkerRemoveOutliers(names_types,
+                                        self.sample_data,
+                                        self.background_data,
+                                        self.subtracted_data,
+                                        size, 
+                                        threshold, 
+                                        self.batch_mode)
+        self.wro.start()
+        self.wro.export_data.connect(self.append_data)
+        self.wro.batchmode_data.connect(self.evt_update_batchmode_data)
+        self.wro.data_name.connect(self.evt_update_pbar_label)
+        self.finished = False
+        self.wro.finished.connect(self.evt_finished) 
                 # self.toggle_select_by_string(
                 #     corr_data["name"], data_2d.info["type"], True
                 # )
-                QApplication.processEvents()
+        
         if not self.batch_mode:
-            self.plot_2d(im_corr, "2D~" + "OLrm_" + data_2d.name.split("~")[1])
+            self.wro.plot_data.connect(self.show_image)
 
         if not self.batch_mode:
             self.clear_lists()
+
+    def evt_finished(self):
+        self.finished = True
+        print("finished")
 
     def plot_1d_1d_data(self, axis, q, intensity, err, label):
         axis.errorbar(q, intensity, yerr=err, label=label)
@@ -2281,20 +2379,21 @@ class Window(QMainWindow):
         else:
             self.scale_max = int(maxindex)
 
-    def append_data(self, data, data_type):
+    def append_data(self, data):
+        data_type = data.info["type"]
         if data_type == "smp":
             data.name = append_name(data.name, self.sample_data)
             self.sample_data[data.name] = data
             self.listWidget_smp.addItem(self.sample_data[data.name].name)
-            # self.listWidget_smp.setCurrentItem(QtWidgets.QListWidgetItem(self.sample_data[data.name].name))
+            # self.listWidget_smp.setCurrentItem(QtWidgets.QListWidgetItem(sample_data[data.name].name))
         elif data_type == "bkg":
             data.name = append_name(data.name, self.background_data)
             self.background_data[data.name] = data
             self.listWidget_bkg.addItem(self.background_data[data.name].name)
         elif data_type == "sub":
-            data.name = append_name(data.name, self.processed_data)
-            self.processed_data[data.name] = data
-            self.listWidget_sub.addItem(self.processed_data[data.name].name)
+            data.name = append_name(data.name, self.subtracted_data)
+            self.subtracted_data[data.name] = data
+            self.listWidget_sub.addItem(self.subtracted_data[data.name].name)
 
     def set_bit_depth(self, array):
         print(array.dtype)
@@ -2337,7 +2436,12 @@ class Window(QMainWindow):
                 )
             self.saturated_pix_mask = True
 
-    def import_data(self, data_type):
+    def evt_update_pbar_label(self, message):
+        self.lbl_pbar.setVisible(True)
+        self.lbl_pbar.setText(message)
+        
+    def click_import_data(self, data_type):
+
         # open file dialog returns a tuple
         fnames, _ = QtWidgets.QFileDialog.getOpenFileNames(
             self,
@@ -2345,85 +2449,50 @@ class Window(QMainWindow):
             "",
             " tif Image (*.tif);;h5 Image (*master.h5);;1D data (*.dat);;All Files (*)",
         )
-        plot_2d_flag = False
-        if not fnames or fnames == "":
+        if len(fnames) == 0:
             return
+        
+        self.t1 = perf_counter()
+        self.prog_dialog = QProgressDialog(self) #, f"Importing {len(fnames)} files", "Importing data")
+        
+        #self.prog_dialog = ProgressDialog(self, f"Importing {len(fnames)} files", "Importing data")
+        self.prog_dialog.show()
+        self.prog_dialog.autoClose()
+        self.prog_dialog.canceled.connect(self.cancel_process)
+        self.prog_dialog.setWindowTitle("Importing data")
+        self.prog_dialog.setLabelText(f"Importing {len(fnames)} files")
+        self.worker = Worker(import_data, fnames, data_type, self.fit2d_mode, self.monitor_002)
+        
+        self.worker.start() 
+        self.worker.export_data.connect(self.append_data)
 
-        for item in fnames:
-            if item.split(".")[-1] == "tif":
-                plot_2d_flag = True
-                data = Data_2d(
-                    os.path.dirname(item),
-                    os.path.basename(item).split(".")[-1],
-                    "2D~" + Path(item).stem,
-                    tifffile.imread(item),
-                    {"type": data_type},
-                )
+        # need to do the init part later
 
-                if self.fit2d_mode:
-                    data.array = np.flipud(data.array)
+        # need to do cancel later
 
-                self.init_image_import(data.array.copy())
-                self.append_data(data, data_type)
+        self.worker.progress_signal.connect(self.prog_dialog.setValue)
+        self.worker.finished.connect(self.timer)
+        #self.wip = WorkerImportData(fnames, data_type, self.fit2d_mode, self.monitor_002)
+        #self.wip.start()
+        #self.wip.export_data.connect(self.append_data)
+        #self.wip.init_image.connect(self.init_image_import)
+        #self.wip.cancel_import.connect(self.cancel_process)
+        #self.wip.data_name.connect(self.evt_update_pbar_label)
 
-            if item.split(".")[-1] == "h5":
-                plot_2d_flag = True
-                if self.monitor_002:
-                    civi, rigi, exp_time = self.readHeaderFile(
-                        os.path.dirname(item), Path(item).stem[0:3]
-                    )
-
-                imgData = fabio.open(item)
-                for num in range(imgData.nframes):
-                    dict = {
-                        "dir": os.path.dirname(item),
-                        "ext": os.path.basename(item).split(".")[-1],
-                        "name": "2D~" + Path(item).stem + "_" + str(num),
-                        "info": {"type": data_type},
-                    }
-                    if imgData.nframes > 1:
-                        dict["data"] = imgData.getframe(num).data
-
-                    else:
-                        dict["data"] = imgData.data
-                    if self.monitor_002:
-                        dict["info"]["civi"] = civi[num]
-                        dict["info"]["rigi"] = rigi[num]
-                        dict["info"]["expTime"] = exp_time[num]
-
-                    data = Data_2d(
-                        dict["dir"],
-                        dict["ext"],
-                        dict["name"],
-                        dict["data"],
-                        dict["info"],
-                    )
-                    if self.fit2d_mode:
-                        data.array = np.flipud(data.array)
-                    self.append_data(data, data_type)
-                    self.init_image_import(dict["data"].copy())
-
-            elif item.split(".")[-1] == "dat":
-                try:
-                    raw_data = np.loadtxt(item, usecols=(0, 1, 2))
-                    # print(raw_data[:,1])
-                    data = Data_1d(
-                        os.path.dirname(item),
-                        os.path.basename(item).split(".")[-1],
-                        "1D~" + Path(item).stem,
-                        raw_data[:, 0],
-                        raw_data[:, 1],
-                        {"type": data_type},
-                        err=raw_data[:, 2],
-                    )
-                    self.append_data(data, data_type)
-                except Exception as e:
-                    print(e)
-        if plot_2d_flag:
-            self.plot_2d(data.array, data.name)
-            self.set_plot_image_name(data.name, data.info["type"])
-
+        #self.wip.progress.connect(self.prog_dialog.setValue)
+        
+        #self.wip.finished.connect(self.timer)
         self.clear_lists()
+    
+    def cancel_process(self):
+        self.worker.cancel_import.emit(True)
+        self.worker.quit()
+        QApplication.processEvents()
+
+    def timer(self):
+        print("importing took ", perf_counter() - self.t1, "s")
+        self.worker.deleteLater()
+        gc.collect()
 
     def show_warning_messagebox(self, text, title="Warning"):
         msg = QtWidgets.QMessageBox()
@@ -2487,7 +2556,7 @@ class Window(QMainWindow):
             name = self.sample_data[index.data()].name
             out["name"] = name.split("~")[0] + "~" + "subd_" + name.split("~")[1]
             out["name"] = append_name(
-                out["name"], self.processed_data
+                out["name"], self.subtracted_data
             )  # add one if exists
             out["info"] = {"type": "sub"}
             if self.mask is not None:
@@ -2498,8 +2567,8 @@ class Window(QMainWindow):
             scale_factor = 1
 
             # if self.monitor_002:
-            #     civi_smp = self.sample_data[index.data()].info['civi']
-            #     civi_bkg = self.background_data[bkg_name].info['civi']
+            #     civi_smp = sample_data[index.data()].info['civi']
+            #     civi_bkg = background_data[bkg_name].info['civi']
             # else:
             civi_smp = 1
             civi_bkg = 1
@@ -2511,7 +2580,7 @@ class Window(QMainWindow):
                 bkg_data * scale_factor, float(self.lineEdit_bkg_TM.text()) * civi_bkg
             )
             out["array"] = np.subtract(part1, part2)
-            self.processed_data[out["name"]] = Data_2d(
+            self.subtracted_data[out["name"]] = Data_2d(
                 out["dir"], out["ext"], out["name"], out["array"], out["info"]
             )
             self.listWidget_sub.addItem(out["name"])
@@ -2521,7 +2590,7 @@ class Window(QMainWindow):
 
         if not self.batch_mode:
             self.set_plot_image_name(out["name"], out["info"]["type"])
-            self.plot_2d(self.processed_data[out["name"]].array, out["name"])
+            self.plot_2d(self.subtracted_data[out["name"]].array, out["name"])
 
         self.tabWidget.setCurrentWidget(self.tab)
         self.listWidget_smp.clearSelection()
@@ -2530,7 +2599,6 @@ class Window(QMainWindow):
 
 if __name__ == "__main__":
     import sys
-
     app = QApplication(sys.argv)
     win = Window()
     win.show()
