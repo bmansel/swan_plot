@@ -1973,6 +1973,8 @@ class Window(QMainWindow):
 
     def remove_selected(self):
         # update to while list
+        print(sys.getrefcount(self.sample_data))
+        print(sys.getsizeof(self.sample_data))
         while len(self.listWidget_smp.selectedIndexes()) > 0:
             item = self.listWidget_smp.selectedIndexes()[0]
             del self.sample_data[item.data()]
@@ -2394,6 +2396,7 @@ class Window(QMainWindow):
             data.name = append_name(data.name, self.subtracted_data)
             self.subtracted_data[data.name] = data
             self.listWidget_sub.addItem(self.subtracted_data[data.name].name)
+        del data
 
     def set_bit_depth(self, array):
         print(array.dtype)
@@ -2409,7 +2412,9 @@ class Window(QMainWindow):
                     This is currently not supported."
             )
 
-    def init_image_import(self, array):
+    def init_image_import(self, data):
+        array = data.array
+        del data
         if self.bit_depth is None:
             self.set_bit_depth(array)
             if not self.BL23A_mode:
@@ -2453,46 +2458,45 @@ class Window(QMainWindow):
             return
         
         self.t1 = perf_counter()
-        self.prog_dialog = QProgressDialog(self) #, f"Importing {len(fnames)} files", "Importing data")
+        prog_dialog = QProgressDialog(self) #, f"Importing {len(fnames)} files", "Importing data")
         
         #self.prog_dialog = ProgressDialog(self, f"Importing {len(fnames)} files", "Importing data")
-        self.prog_dialog.show()
-        self.prog_dialog.autoClose()
-        self.prog_dialog.canceled.connect(self.cancel_process)
-        self.prog_dialog.setWindowTitle("Importing data")
-        self.prog_dialog.setLabelText(f"Importing {len(fnames)} files")
+        prog_dialog.show()
+        prog_dialog.autoClose()
+        prog_dialog.canceled.connect(self.cancel_process)
+        prog_dialog.setWindowTitle("Importing data")
+        prog_dialog.setLabelText(f"Importing {len(fnames)} files")
         self.worker = Worker(import_data, fnames, data_type, self.fit2d_mode, self.monitor_002)
         
         self.worker.start() 
         self.worker.export_data.connect(self.append_data)
+        #self.worker.export_data.connect(self.init_image_import)
 
         # need to do the init part later
 
         # need to do cancel later
 
-        self.worker.progress_signal.connect(self.prog_dialog.setValue)
+        self.worker.progress_signal.connect(prog_dialog.setValue)
         self.worker.finished.connect(self.timer)
+        self.worker.finished.connect(self.worker.deleteLater)
         #self.wip = WorkerImportData(fnames, data_type, self.fit2d_mode, self.monitor_002)
         #self.wip.start()
         #self.wip.export_data.connect(self.append_data)
-        #self.wip.init_image.connect(self.init_image_import)
-        #self.wip.cancel_import.connect(self.cancel_process)
-        #self.wip.data_name.connect(self.evt_update_pbar_label)
-
-        #self.wip.progress.connect(self.prog_dialog.setValue)
-        
-        #self.wip.finished.connect(self.timer)
+                #self.wip.cancel_import.connect(self.cancel_process)
         self.clear_lists()
     
     def cancel_process(self):
-        self.worker.cancel_import.emit(True)
-        self.worker.quit()
+        self.worker.cancel_signal.emit(True)
+        #self.worker.quit()
         QApplication.processEvents()
 
     def timer(self):
         print("importing took ", perf_counter() - self.t1, "s")
-        self.worker.deleteLater()
+        #self.worker.deleteLater()
+        #del self.worker
+
         gc.collect()
+        #print(self.worker)
 
     def show_warning_messagebox(self, text, title="Warning"):
         msg = QtWidgets.QMessageBox()

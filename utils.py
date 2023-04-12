@@ -770,14 +770,22 @@ class Worker(QThread):
     
     def run(self):
         self.fn(
+            self,
             self.export_data,
             self.cancel_signal,
             self.progress_signal,
             self.data_name,
             *self.args
         )
+        self.cancel_signal.connect(self.cancel_thread)
+
+    def cancel_thread(self, val):
+        if val is True:
+            self.canceled = True
+
         
 def import_data(
+        self,
         export_data,
         cancel_signal,
         progress_signal,
@@ -788,9 +796,10 @@ def import_data(
         monitor_002
     ):
     exported = 0
-    canceled = False
+    self.canceled = False
     for item in fnames:
-        if canceled:
+        if self.canceled:
+            self.exit()
             return
         
 
@@ -868,8 +877,8 @@ def import_data(
 
         exported += 1
         progress_signal.emit(int((exported / len(fnames)) * 100))
-        
-        #self.cancel_import.connect(self.cancel_thread)
+        cancel_signal.connect(self.cancel_thread)
+        #cancel_import.connect(self.cancel_thread)
 
 
 
