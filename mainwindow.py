@@ -34,12 +34,10 @@ from utils import (
     combine_masks,
     make_reject_mask,
     make_saturated_mask,
-    WorkerImportData,
-    WorkerIntegrateData,
-    WorkerRemoveOutliers,
+    remove_outliers,
     Worker,
     import_data,
-    ProgressDialog
+    integrate_data
 )
 
 class Window(QMainWindow):
@@ -443,7 +441,7 @@ class Window(QMainWindow):
         self.label_2.setFont(font)
         self.label_2.setObjectName("label_2")
         self.btn_remove_outliers = QtWidgets.QPushButton(
-            self.groupBox_5, clicked=lambda: self.click_rem_outliers()
+            self.groupBox_5, clicked=lambda: self.click_remove_outliers()
         )
         self.btn_remove_outliers.setGeometry(QtCore.QRect(10, 130, 151, 25))
         font = QtGui.QFont()
@@ -818,7 +816,8 @@ class Window(QMainWindow):
                     selected to subtract off."
             )
             return False
-
+        
+    
     def click_batch_process(self):
         '''
         This does the batch processing of the data.
@@ -838,36 +837,57 @@ class Window(QMainWindow):
         self.batch_sub_2d = []
 
         self.groupBox.setEnabled(False)
-        self.lbl_pbar.setVisible(True)
-        self.pbar.setVisible(True)
-        self.lbl_pbar.setText("Batch processing...")
-        self.pbar.setValue(0)
+        
+        expected_smps = len(self.get_all_selected("smp"))
+        expected_bkgs = len(self.get_all_selected("bkg"))
+        print("expected samples is", expected_smps)
+        print("expected bkgs is", expected_bkgs)
+
         self.batch_mode = True
         QApplication.processEvents()
-        self.click_rem_outliers()  # now appends to batch_XXX_2d list
-        while not self.finished:
+        self.click_remove_outliers()  # now appends to batch_XXX_2d list
+        while self.worker.isRunning():
             QApplication.processEvents()
-            time.sleep(0.1)
+            time.sleep(0.001)
+        
+        while (len(self.batch_smp_2d) < expected_smps):
+            QApplication.processEvents()
+            time.sleep(0.01)
 
-        self.lbl_pbar.setText("Removed outliers...1/4")
-        self.pbar.setValue(25)
+        while (len(self.batch_bkg_2d) < expected_bkgs):
+            QApplication.processEvents()
+            time.sleep(0.01)
+
+        print("THIS SHOULD HAVE 1 ITEM :", self.batch_bkg_2d)
+        print("THIS SHOULD HAVE 1 ITEM :", len(self.batch_bkg_2d))
 
         # clear all list widgets
         self.clear_lists()
 
         for item in self.batch_smp_2d:
             self.toggle_select_by_string(item, "smp", True)
+            print("item batch_smp_2d is", item) #debug 
 
         for item in self.batch_bkg_2d:
+            print("item batch_bkg_2d is", item) #debug 
             self.toggle_select_by_string(item, "bkg", True)
 
         self.click_integrate() 
-        while not self.finished:
+        while self.worker.isRunning():
             QApplication.processEvents()
-            time.sleep(0.1)   
+            time.sleep(0.01)  
+
+        while len(self.batch_smp_1d) < expected_smps:
+            QApplication.processEvents()
+            time.sleep(0.01)
+
+        while len(self.batch_bkg_1d) < expected_bkgs:
+            QApplication.processEvents()
+            time.sleep(0.01)
+
         self.clear_lists()
-        self.lbl_pbar.setText("Integrated...2/4")
-        self.pbar.setValue(50)
+        #self.lbl_pbar.setText("Integrated...2/4")
+        #self.pbar.setValue(50)
         QApplication.processEvents()
         if len(self.batch_bkg_2d) > 0:
             self.toggle_select_by_string(self.batch_bkg_2d[0], "bkg", True)
@@ -875,15 +895,20 @@ class Window(QMainWindow):
                 self.toggle_select_by_string(item, "smp", True)
             self.click_subtract()
             self.clear_lists()
-            self.toggle_select_by_string(self.batch_bkg_1d[0], "bkg", True)
+            print("batch_bkg_1d is", self.batch_bkg_1d)
+            if len(self.batch_bkg_1d) > 0:
+                self.toggle_select_by_string(self.batch_bkg_1d[0], "bkg", True)
+            else:
+                print("No background 1d data to subtract off.")
+                return
             for item in self.batch_smp_1d:
                 self.toggle_select_by_string(item, "smp", True)
             self.click_subtract()
             self.clear_lists()
-            self.lbl_pbar.setText("Subtracted...3/4")
-        else:
-            self.lbl_pbar.setText("No subtract...3/4")
-        self.pbar.setValue(75)
+         #   self.lbl_pbar.setText("Subtracted...3/4")
+        #else:
+            #self.lbl_pbar.setText("No subtract...3/4")
+        #self.pbar.setValue(75)
 
         # select all processed data:
         
@@ -904,10 +929,11 @@ class Window(QMainWindow):
 
         for item in self.batch_sub_1d:
             self.toggle_select_by_string(item, "sub", True)
-        
+        count = 0
+
         self.click_export()
-        self.lbl_pbar.setText("Exported all subtracted...4/4")
-        self.pbar.setValue(100)
+        #self.lbl_pbar.setText("Exported all subtracted...4/4")
+        #self.pbar.setValue(100)
         self.batch_mode = False
         self.groupBox.setEnabled(True)
         self.clear_lists()
@@ -1713,6 +1739,7 @@ class Window(QMainWindow):
 
             names_types = []
             for item in temp:
+                print("integrate item is :", item)
                 if item[1] == "smp":
                     if isinstance(self.sample_data[item[0]], Data_2d):
                         names_types.append(item)
@@ -1723,7 +1750,14 @@ class Window(QMainWindow):
                     if isinstance(self.subtracted_data[item[0]], Data_2d):
                         names_types.append(item)
             
-            self.wid = WorkerIntegrateData(
+            prog_dialog = QProgressDialog(self)
+            prog_dialog.show()
+            prog_dialog.autoClose()
+            prog_dialog.canceled.connect(self.cancel_process)
+            prog_dialog.setWindowTitle("Integrating data")
+            prog_dialog.setLabelText(f"Integrating {len(names_types)} files")
+            self.worker = Worker(
+                integrate_data,
                 self.ai,
                 self.sample_data,
                 self.background_data,
@@ -1737,13 +1771,18 @@ class Window(QMainWindow):
                 float(self.lineEdit_bkg_TM.text().strip()),
                 self.batch_mode,
                 self.monitor_002
-            )
-            self.finished = False
-            self.wid.start()
-            self.wid.export_data.connect(self.append_data)
-            self.wid.batchmode_data.connect(self.evt_update_batchmode_data)
-            self.wid.data_name.connect(self.evt_update_pbar_label)
-            self.wid.finished.connect(self.evt_finished)
+                )
+            self.worker.start() 
+            self.worker.export_data.connect(self.append_data)
+            if self.batch_mode:
+                self.worker.export_data.connect(self.append_batch_mode_lists)
+            if not prog_dialog.wasCanceled():
+                self.worker.progress_signal.connect(prog_dialog.setValue)
+            self.worker.finished.connect(self.worker.deleteLater)
+
+            if not self.batch_mode:
+                self.worker.finished.connect(self.clear_lists)
+
             # for data in self.get_all_selected():
             #     if isinstance(data, Data_2d):
             #         if data.info["type"] == "smp":
@@ -2140,7 +2179,8 @@ class Window(QMainWindow):
 
     def export_single_dat(self, data):
         if not self.batch_mode:
-            path = os.path.join(data.dir, data.name.split("~")[1] + "." + data.ext)
+            path = os.path.join(data.dir, data.name.split("~")[1] + ".dat")
+            print("extension is {data.ext}")
             if os.path.exists(path):
                 old_path = path
                 path = self.append_file(path)
@@ -2158,7 +2198,7 @@ class Window(QMainWindow):
                 os.mkdir(os.path.join(data.dir, "batch_processed"))
 
             path = os.path.join(
-                data.dir, "batch_processed", data.name.split("~")[1] + "." + data.ext
+                data.dir, "batch_processed", data.name.split("~")[1] + ".dat"
             )
             np.savetxt(
                 path,
@@ -2233,7 +2273,7 @@ class Window(QMainWindow):
             self.batch_bkg_1d.append(data.name)
 
     
-    def click_rem_outliers(self):
+    def click_remove_outliers(self):
         # if we have a large number selected we copy these to a new list??
         # this is not needed...
         temp = self.get_names_types_selected()
@@ -2248,7 +2288,7 @@ class Window(QMainWindow):
             else:
                 if isinstance(self.subtracted_data[item[0]], Data_2d):
                     names_types.append(item)
-    
+
         #data_2d_all = self.get_all_selected()
 
         # for data_2d in data_2d_all:
@@ -2264,32 +2304,56 @@ class Window(QMainWindow):
             size = int(5)
         
         threshold = float(self.lineEdit_threshold.text())
-        self.wro = WorkerRemoveOutliers(names_types,
-                                        self.sample_data,
-                                        self.background_data,
-                                        self.subtracted_data,
-                                        size, 
-                                        threshold, 
-                                        self.batch_mode)
-        self.wro.start()
-        self.wro.export_data.connect(self.append_data)
-        self.wro.batchmode_data.connect(self.evt_update_batchmode_data)
-        self.wro.data_name.connect(self.evt_update_pbar_label)
-        self.finished = False
-        self.wro.finished.connect(self.evt_finished) 
-                # self.toggle_select_by_string(
-                #     corr_data["name"], data_2d.info["type"], True
-                # )
         
+        prog_dialog = QProgressDialog(self)
+        prog_dialog.show()
+        prog_dialog.autoClose()
+        prog_dialog.canceled.connect(self.cancel_process)
+        prog_dialog.setWindowTitle("Removing outliers.")
+        prog_dialog.setLabelText(f"Processing {len(names_types)} files")
+        self.worker = Worker(
+                    remove_outliers,
+                    names_types,
+                    self.sample_data,
+                    self.background_data,
+                    self.subtracted_data,
+                    size, 
+                    threshold, 
+                    self.batch_mode
+        )
+        self.worker.start()
+        self.worker.export_data.connect(self.append_data)
+        if self.batch_mode == True:
+            self.worker.export_data.connect(self.append_batch_mode_lists)
+        
+                  
+        if not prog_dialog.wasCanceled():
+            self.worker.progress_signal.connect(prog_dialog.setValue)
         if not self.batch_mode:
-            self.wro.plot_data.connect(self.show_image)
+            self.worker.finished.connect(self.clear_lists)
+        self.worker.finished.connect(self.worker.deleteLater)
+        self.worker.finished.connect(self.worker.quit)
 
-        if not self.batch_mode:
-            self.clear_lists()
-
-    def evt_finished(self):
-        self.finished = True
-        print("finished")
+    def append_batch_mode_lists(self,data):
+        if isinstance(data, Data_1d):
+            if data.info["type"] == "smp":
+                self.batch_smp_1d.append(data.name)
+            elif data.info["type"] == "bkg":
+                self.batch_bkg_1d.append(data.name)
+            elif data.info["type"] == "sub":
+                self.batch_sub_1d.append(data.name)
+        elif isinstance(data, Data_2d):
+            if data.info["type"] == "smp":
+                self.batch_smp_2d.append(data.name)
+            elif data.info["type"] == "bkg":
+                self.batch_bkg_2d.append(data.name)
+                print("Should append at this line") #debug
+                print("batch_bkg_2d :", self.batch_bkg_2d) #debug
+            elif data.info["type"] == "sub":
+                self.batch_sub_2d.append(data.name)
+        print("append_batch_mode_lists name: ", data.name) #debug
+        print("append_batch_mode_lists type: ", data.info["type"]) #debug
+    
 
     def plot_1d_1d_data(self, axis, q, intensity, err, label):
         axis.errorbar(q, intensity, yerr=err, label=label)
@@ -2475,20 +2539,18 @@ class Window(QMainWindow):
         # need to do the init part later
 
         # need to do cancel later
-
-        self.worker.progress_signal.connect(prog_dialog.setValue)
+        if not prog_dialog.wasCanceled():
+            self.worker.progress_signal.connect(prog_dialog.setValue)
         self.worker.finished.connect(self.timer)
         self.worker.finished.connect(self.worker.deleteLater)
-        #self.wip = WorkerImportData(fnames, data_type, self.fit2d_mode, self.monitor_002)
-        #self.wip.start()
-        #self.wip.export_data.connect(self.append_data)
-                #self.wip.cancel_import.connect(self.cancel_process)
         self.clear_lists()
     
     def cancel_process(self):
+        #self.prog_dialog.destroy(destroyWindow=True)
+        QApplication.processEvents()
         self.worker.cancel_signal.emit(True)
         #self.worker.quit()
-        QApplication.processEvents()
+        
 
     def timer(self):
         print("importing took ", perf_counter() - self.t1, "s")

@@ -12,7 +12,7 @@ from pathlib import Path
 from matplotlib.patches import Arc
 from matplotlib.transforms import IdentityTransform, TransformedBbox, Bbox
 from PyQt5.QtWidgets import QProgressDialog
-from PyQt5.QtCore import QThread, pyqtSignal, QTimer
+from PyQt5.QtCore import QThread, pyqtSignal, pyqtSlot
 import tifffile
 
 
@@ -615,145 +615,146 @@ class Data_1d:
         self.err = err
         self.info = info
 
-class WorkerRemoveOutliers(QThread):
-    export_data = pyqtSignal(object)
-    batchmode_data = pyqtSignal(object)
-    plot_data = pyqtSignal(object)
-    data_name = pyqtSignal(str)
+def remove_outliers(self,
+                export_data,
+                cancel_signal,
+                progress_signal,
+                data_name,
+                names_types,
+                sample_data, 
+                background_data, 
+                subtracted_data, 
+                size, 
+                threshold, 
+                batch_mode        
+                ):
+    exported = 0
+    self.canceled = False
 
-    def __init__(self, 
-                 names_types,
-                 sample_data, 
-                 background_data, 
-                 subtracted_data, 
-                 size, 
-                 threshold, 
-                 batch_mode):
-        super().__init__()
-        self.names_types = names_types
-        self.sample_data = sample_data
-        self.background_data = background_data
-        self.subtracted_data = subtracted_data
-        self.size = size
-        self.threshold = threshold
-        self.batch_mode = batch_mode
+    for item in names_types:
+        
+        if self.canceled:
+            self.deleteLater()
+            return
+        
+        if item[1] == "smp":
+            corr_data = Data_2d(
+                sample_data[item[0]].dir,
+                sample_data[item[0]].ext,
+                "2D~" + "OLrm_" + sample_data[item[0]].name.split("~")[1],
+                sample_data[item[0]].remove_outliers(size, threshold),
+                sample_data[item[0]].info
+            )
+            #self.sample_data[corr_data.name] = corr_data
+        elif item[1] == "bkg":
+            corr_data = Data_2d(
+                background_data[item[0]].dir,
+                background_data[item[0]].ext,
+                "2D~" + "OLrm_" + background_data[item[0]].name.split("~")[1],
+                background_data[item[0]].remove_outliers(size, threshold),
+                background_data[item[0]].info
+            )
+            #self.background_data[corr_data.name] = corr_data
+        else:
+            corr_data = Data_2d(
+                subtracted_data[item[0]].dir,
+                subtracted_data[item[0]].ext,
+                "2D~" + "OLrm_" + subtracted_data[item[0]].name.split("~")[1],
+                subtracted_data[item[0]].remove_outliers(size, threshold),
+                subtracted_data[item[0]].info
+            )
+            #self.subtracted_data[corr_data.name] = corr_data
 
-    def run(self):
-        for item in self.names_types:
-            if item[1] == "smp":
-                corr_data = Data_2d(
-                    self.sample_data[item[0]].dir,
-                    self.sample_data[item[0]].ext,
-                    "2D~" + "OLrm_" + self.sample_data[item[0]].name.split("~")[1],
-                    self.sample_data[item[0]].remove_outliers(self.size, self.threshold),
-                    self.sample_data[item[0]].info
-                )
-                #self.sample_data[corr_data.name] = corr_data
-            elif item[1] == "bkg":
-                corr_data = Data_2d(
-                    self.background_data[item[0]].dir,
-                    self.background_data[item[0]].ext,
-                    "2D~" + "OLrm_" + self.background_data[item[0]].name.split("~")[1],
-                    self.background_data[item[0]].remove_outliers(self.size, self.threshold),
-                    self.background_data[item[0]].info
-                )
-                #self.background_data[corr_data.name] = corr_data
-            else:
-                corr_data = Data_2d(
-                    self.subtracted_data[item[0]].dir,
-                    self.subtracted_data[item[0]].ext,
-                    "2D~" + "OLrm_" + self.subtracted_data[item[0]].name.split("~")[1],
-                    self.subtracted_data[item[0]].remove_outliers(self.size, self.threshold),
-                    self.subtracted_data[item[0]].info
-                )
-                #self.subtracted_data[corr_data.name] = corr_data
+        self.export_data.emit(corr_data)
+        exported += 1
+        if self.canceled != True:
+            progress_signal.emit(int((exported / len(names_types)) * 100))
+        cancel_signal.connect(self.cancel_thread)
+        
+        # if self.batch_mode:
+        #     self.batchmode_data.emit(corr_data)
+        # else:
+        #     self.data_name.emit("Processed: " + corr_data.name)
 
-            self.export_data.emit(corr_data)
-            
-            if self.batch_mode:
-                self.batchmode_data.emit(corr_data)
-            else:
-                self.data_name.emit("Processed: " + corr_data.name)
+    # only plot last one
+    # if not self.batch_mode:
+    #     self.plot_data.emit(corr_data)
 
-        # only plot last one
-        if not self.batch_mode:
-            self.plot_data.emit(corr_data)
+
+
                 
-class WorkerIntegrateData(QThread):
-    export_data = pyqtSignal(object)
-    batchmode_data = pyqtSignal(object)
-    plot_data = pyqtSignal(object)
-    data_name = pyqtSignal(str)
+def integrate_data(self, 
+                export_data,
+                cancel_signal,
+                progress_signal,
+                data_name,
+                ai,
+                sample_data,
+                background_data,
+                subtracted_data,
+                names_types, 
+                q_bins, 
+                chi_start, 
+                chi_end, 
+                mask, 
+                TMsmp, 
+                TMbkg,
+                batch_mode,
+                monitor_002
+                 ):
+    exported = 0
+    self.canceled = False
+    for item in names_types:
+        if self.canceled:
+            return
+        
+        if item[1] == "smp":
+            data_2d = sample_data[item[0]]
+            normValue = TMsmp
+        elif item[1] == "bkg":
+            data_2d = background_data[item[0]]
+            normValue = TMbkg
+        else:
+            data_2d = subtracted_data[item[0]]
+            normValue = 1
+        if monitor_002:
+            normValue *= data_2d.info["civi"]
 
-    def __init__(self, 
-                 ai,
-                 sample_data,
-                 background_data,
-                 subtracted_data,
-                 names_types, 
-                 q_bins, 
-                 chi_start, 
-                 chi_end, 
-                 mask, 
-                 TMsmp, 
-                 TMbkg,
-                 batch_mode,
-                 monitor_002):
-        super().__init__()
-        self.ai = ai
-        self.sample_data = sample_data
-        self.background_data = background_data
-        self.subtracted_data = subtracted_data
-        self.names_types = names_types
-        self.q_bins = q_bins
-        self.chi_start = chi_start
-        self.chi_end = chi_end
-        self.mask = mask
-        self.TMsmp = TMsmp
-        self.TMbkg = TMbkg
-        self.batch_mode = batch_mode
-        self.monitor_002 = monitor_002
+
+        q, intensity, err = data_2d.integrate_image(
+            ai, q_bins, chi_start, chi_end, mask, normValue
+        )
+
+        corr_data = Data_1d(
+            data_2d.dir,
+            data_2d.ext,
+            "1D~" + data_2d.name.split("~")[1],
+            q,
+            intensity,
+            err,
+            data_2d.info,
+        )
+        print("integrated data: " + corr_data.name)
+        export_data.emit(corr_data)
+        exported += 1
+        if self.canceled != True:
+            progress_signal.emit(int((exported / len(names_types)) * 100))
+        
+        cancel_signal.connect(self.cancel_thread)
+        
+        # if self.batch_mode:
+        #     self.batchmode_data.emit(corr_data)
+        # else:
+        #     self.data_name.emit("Processed: " + corr_data.name)
+
+    # only plot last one
+    # if not self.batch_mode:
+    #     self.plot_data.emit(corr_data)
     
-    def run(self):
-
-        for item in self.names_types:
-            if item[1] == "smp":
-                data_2d = self.sample_data[item[0]]
-                normValue = self.TMsmp
-            elif item[1] == "bkg":
-                data_2d = self.background_data[item[0]]
-                normValue = self.TMbkg
-            else:
-                data_2d = self.subtracted_data[item[0]]
-                normValue = 1
-            if self.monitor_002:
-                normValue *= data_2d.info["civi"]
 
 
-            q, intensity, err = data_2d.integrate_image(
-                self.ai, self.q_bins, self.chi_start, self.chi_end, self.mask, normValue
-            )
 
-            corr_data = Data_1d(
-                data_2d.dir,
-                data_2d.ext,
-                "1D~" + data_2d.name.split("~")[1],
-                q,
-                intensity,
-                err,
-                data_2d.info,
-            )
-            
-            self.export_data.emit(corr_data)
-            
-            if self.batch_mode:
-                self.batchmode_data.emit(corr_data)
-            else:
-                self.data_name.emit("Processed: " + corr_data.name)
 
-        # only plot last one
-        if not self.batch_mode:
-            self.plot_data.emit(corr_data)
 
 
 class Worker(QThread):
@@ -768,6 +769,7 @@ class Worker(QThread):
         self.args = args
         self.kwargs = kwargs
     
+    @pyqtSlot()
     def run(self):
         self.fn(
             self,
@@ -777,11 +779,12 @@ class Worker(QThread):
             self.data_name,
             *self.args
         )
-        self.cancel_signal.connect(self.cancel_thread)
+        #self.cancel_signal.connect(self.cancel_thread)
 
     def cancel_thread(self, val):
         if val is True:
             self.canceled = True
+            
 
         
 def import_data(
@@ -799,7 +802,7 @@ def import_data(
     self.canceled = False
     for item in fnames:
         if self.canceled:
-            self.exit()
+            self.deleteLater()
             return
         
 
@@ -876,153 +879,9 @@ def import_data(
                 print(e)
 
         exported += 1
-        progress_signal.emit(int((exported / len(fnames)) * 100))
+        if not self.canceled:
+            progress_signal.emit(int((exported / len(fnames)) * 100))
         cancel_signal.connect(self.cancel_thread)
-        #cancel_import.connect(self.cancel_thread)
-
-
-
-
-class WorkerImportData(QThread):
-
-    export_data = pyqtSignal(object)
-    init_image = pyqtSignal(object)
-    data_name = pyqtSignal(str)
-    progress = pyqtSignal(int)
-    cancel_import = pyqtSignal(bool)
-
-    
-    def __init__(self,
-                 fnames,
-                 data_type, 
-                 fit2d_mode,
-                 monitor_002,
-                 parent=None):
-        QThread.__init__(self, parent)
-        self.fnames = fnames
-        self.data_type = data_type
-        self.fit2d_mode = fit2d_mode
-        self.monitor_002 = monitor_002
-    
-    def run(self):
-        plot_2d_flag = False
-        if not self.fnames or self.fnames == "":
-            return
-
-        exported = 0
-        self.canceled = False
-        for item in self.fnames:
-            if self.canceled:
-                return
-            
-
-            if item.split(".")[-1] == "tif":
-                plot_2d_flag = True
-                data = Data_2d(
-                    os.path.dirname(item),
-                    os.path.basename(item).split(".")[-1],
-                    "2D~" + Path(item).stem,
-                    tifffile.imread(item),
-                    {"type": self.data_type},
-                )
-
-                if self.fit2d_mode:
-                    data.array = np.flipud(data.array)
-
-                #can get rid of this in the future...
-                self.init_image.emit(data.array) # changed from copy...
-                self.export_data.emit(data)
-                self.data_name.emit("Imported: " + data.name)
-                del data
-
-            elif item.split(".")[-1] == "h5":
-                plot_2d_flag = True
-                if self.monitor_002:
-                    civi, rigi, exp_time = readHeaderFile(
-                        os.path.dirname(item), Path(item).stem[0:3]
-                    )
-                
-                imgData = fabio.open(item)
-                for num in range(imgData.nframes):
-                    temp = {
-                        "dir": os.path.dirname(item),
-                        "ext": os.path.basename(item).split(".")[-1],
-                        "name": "2D~" + Path(item).stem + "_" + str(num),
-                        "info": {"type": self.data_type},
-                    }
-                    if imgData.nframes > 1:
-                        temp["data"] = imgData.getframe(num).data
-
-                    else:
-                        temp["data"] = imgData.data
-                    if self.monitor_002:
-                        temp["info"]["civi"] = civi[num]
-                        temp["info"]["rigi"] = rigi[num]
-                        temp["info"]["expTime"] = exp_time[num]
-
-                    data = Data_2d(
-                        temp["dir"],
-                        temp["ext"],
-                        temp["name"],
-                        temp["data"],
-                        temp["info"],
-                    )
-                    if self.fit2d_mode:
-                        data.array = np.flipud(data.array)
-                    self.export_data.emit(data)
-                    self.init_image.emit(temp["data"])
-                    self.data_name.emit("Imported: " + data.name)
-                    del temp, data
-            
-            elif item.split(".")[-1] == "dat":
-                try:
-                    raw_data = np.loadtxt(item, usecols=(0, 1, 2))
-                    # print(raw_data[:,1])
-                    data = Data_1d(
-                        os.path.dirname(item),
-                        os.path.basename(item).split(".")[-1],
-                        "1D~" + Path(item).stem,
-                        raw_data[:, 0],
-                        raw_data[:, 1],
-                        {"type": self.data_type},
-                        err=raw_data[:, 2],
-                    )
-                    self.export_data.emit(data)
-                    self.data_name.emit("Imported: " + data.name)
-                    del data
-                except Exception as e:
-                    print(e)
-
-            exported += 1
-            self.progress.emit(self.calc_percent(exported, len(self.fnames)))
-            
-            self.cancel_import.connect(self.cancel_thread)
-            
-    def cancel_thread(self, val):
-        if val is True:
-                self.terminate()
-            #self.cancel_import.emit(True)
-    
-    def calc_percent(self, i, n):
-        return int((i / n) * 100)
-    
-
-class ProgressDialog(QProgressDialog):
-    def __init__(self, parent, op_str, title):
-        super().__init__(parent,op_str, title)
-        self.steps = 0
-        self.op_str = op_str
-        pd = QProgressDialog(self.op_str, "Cancel", 0, 100)
-        pd.setWindowTitle(title)
-        #pd.canceled.connect(self.cancel)
-
-    # def cancel(self):
-    #      self.cancel_import.emit(True)
-    #      print("cancelled")
-        
-
-
-
 
 # class WorkerSignals(QtCore.QObject):
 #     '''
