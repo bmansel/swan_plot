@@ -616,7 +616,7 @@ class Data_1d:
         self.info = info
 
 def remove_outliers(self,
-                export_data,
+                export_data_signal,
                 cancel_signal,
                 progress_signal,
                 data_name,
@@ -665,7 +665,7 @@ def remove_outliers(self,
             )
             #self.subtracted_data[corr_data.name] = corr_data
 
-        self.export_data.emit(corr_data)
+        self.export_data_signal.emit(corr_data)
         exported += 1
         if self.canceled != True:
             progress_signal.emit(int((exported / len(names_types)) * 100))
@@ -684,7 +684,7 @@ def remove_outliers(self,
 
                 
 def integrate_data(self, 
-                export_data,
+                export_data_signal,
                 cancel_signal,
                 progress_signal,
                 data_name,
@@ -735,7 +735,7 @@ def integrate_data(self,
             data_2d.info,
         )
         print("integrated data: " + corr_data.name)
-        export_data.emit(corr_data)
+        export_data_signal.emit(corr_data)
         exported += 1
         if self.canceled != True:
             progress_signal.emit(int((exported / len(names_types)) * 100))
@@ -752,13 +752,127 @@ def integrate_data(self,
     #     self.plot_data.emit(corr_data)
     
 
+def export_data(self,
+            export_data_signal,
+            cancel_signal,
+            progress_signal,
+            data_name,
+            sample_data,
+            background_data,
+            subtracted_data,
+            names_types,
+            bit_depth,
+            batch_mode,):
+    
+    
+    exported = 0    
+    self.canceled = False
+    for item in names_types:
+        if self.canceled:
+            return
+        data = get_data(item[0], item[1], sample_data, background_data, subtracted_data)
+        if isinstance(data, Data_1d):
+            print("exporting 1d data")
+            export_single_dat(data, batch_mode)
+        elif isinstance(data, Data_2d):
+            export_single_image(data, bit_depth, batch_mode)
+        elif isinstance(data, Data_1d_az):
+            export_1d_az(data)
+        exported += 1
+        if self.canceled != True:
+            progress_signal.emit(int((exported / len(names_types)) * 100))
+        
+        cancel_signal.connect(self.cancel_thread)
 
+def get_data(name, dat_type, sample_data, background_data, subtracted_data):
+    if dat_type == "smp":
+        return sample_data[name]
+    elif dat_type == "bkg":
+        return background_data[name]
+    else:
+        return subtracted_data[name]
+
+def export_1d_az(data):
+    path = os.path.join(
+        data.dir, data.name.split("~")[1] + "_azimuthal_" + "." + data.ext
+    )
+    if os.path.exists(path):
+        path = append_file(path)
+
+        #TODO: add warning message box
+        # self.show_warning_messagebox(
+        #     "File " + old_path + " found, saving to " + path
+        # )
+    np.savetxt(
+        path, np.transpose([data.chi, data.intensity]), fmt="%1.6e", delimiter="    "
+    )
+
+def export_single_dat(data, batch_mode):
+    if not batch_mode:
+        path = os.path.join(data.dir, data.name.split("~")[1] + ".dat")
+        if os.path.exists(path):
+            old_path = path
+            path = append_file(path)
+            #TODO: add warning message box
+            # self.show_warning_messagebox(
+            #     "File " + old_path + " found, saving to " + path
+            # )
+        np.savetxt(
+            path,
+            np.transpose([data.q, data.intensity, data.err]),
+            fmt="%1.6e",
+            delimiter="    ",
+        )
+    else:
+        if not os.path.exists(os.path.join(data.dir, "batch_processed")):
+            os.mkdir(os.path.join(data.dir, "batch_processed"))
+
+        path = os.path.join(
+            data.dir, "batch_processed", data.name.split("~")[1] + ".dat"
+        )
+        np.savetxt(
+            path,
+            np.transpose([data.q, data.intensity, data.err]),
+            fmt="%1.6e",
+            delimiter="    ",
+        )
+    print("saved to: " + path)
+
+def export_single_image(data, bit_depth, batch_mode):
+    if bit_depth == 32:
+        data.array = data.array.astype("int32")
+    elif bit_depth == 16:
+        data.array = data.array.astype("int16")
+    elif bit_depth == 8:
+        data.array = data.array.astype("int8")
+    if not batch_mode:
+        path = os.path.join(
+            data.dir, data.name.split("~")[1] + "." + "tif"
+        )  # always save as tif
+        if os.path.exists(path):
+            old_path = path
+            path = append_file(path)
+            
+            #TODO: add warning message box
+            # self.show_warning_messagebox(
+            #     "File " + old_path + " found, saving to " + path
+            # )
+        tifffile.imwrite(path, data.array, dtype=data.array.dtype)
+    else:
+        if not os.path.exists(os.path.join(data.dir, "batch_processed")):
+            os.mkdir(os.path.join(data.dir, "batch_processed"))
+        path = os.path.join(
+            data.dir, "batch_processed", data.name.split("~")[1] + "." + "tif"
+        )
+        tifffile.imwrite(path, data.array, dtype=data.array.dtype)
+
+    print("saved to: " + path)
 
 
 
 
 class Worker(QThread):
-    export_data = pyqtSignal(object)
+    export_data_signal = pyqtSignal(object)
     cancel_signal = pyqtSignal(bool)
     progress_signal = pyqtSignal(int)
     data_name = pyqtSignal(str)
@@ -773,7 +887,7 @@ class Worker(QThread):
     def run(self):
         self.fn(
             self,
-            self.export_data,
+            self.export_data_signal,
             self.cancel_signal,
             self.progress_signal,
             self.data_name,
@@ -785,11 +899,38 @@ class Worker(QThread):
         if val is True:
             self.canceled = True
             
+def append_file(path):
+        counter = 0
+        base_path = os.path.dirname(path)
+        ext = os.path.basename(path).split(".")[-1]
+        name = Path(path).stem
+        if os.path.exists(path):
+            # check if number suffix already:
+            suff = name.split("_")[-1]
 
+            if suff.isnumeric():
+                counter = int(suff)
+                pref = name.split("_")[:-1]
+                pref = "".join(map(str, pref))
+            else:
+                counter = 0
+                pref = name
+
+            while True:
+                counter += 1
+
+                new_name = pref + "_" + str(counter)
+                new_path = os.path.join(base_path, new_name + "." + ext)
+                if os.path.exists(new_path):
+                    continue
+                else:
+                    path = new_path
+                    break
+        return path
         
 def import_data(
         self,
-        export_data,
+        export_data_signal,
         cancel_signal,
         progress_signal,
         data_name,
@@ -818,7 +959,7 @@ def import_data(
             if fit2d_mode:
                 data.array = np.flipud(data.array)
 
-            export_data.emit(data)
+            export_data_signal.emit(data)
             data_name.emit(data.name)
             del data
 
@@ -855,7 +996,7 @@ def import_data(
                 )
                 if fit2d_mode:
                     data.array = np.flipud(data.array)
-                export_data.emit(data)
+                export_data_signal.emit(data)
                 data_name.emit("Imported: " + data.name)
                 del temp, data
         
@@ -872,7 +1013,7 @@ def import_data(
                     {"type": data_type},
                     err=raw_data[:, 2],
                 )
-                export_data.emit(data)
+                export_data_signal.emit(data)
                 data_name.emit("Imported: " + data.name)
                 del data
             except Exception as e:

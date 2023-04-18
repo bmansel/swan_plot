@@ -25,19 +25,20 @@ from PyQt5.QtWidgets import QApplication, QInputDialog, QMainWindow, QMenu, QWid
 
 from utils import (
     AngleAnnotation,
+    append_name,
+    combine_masks,
     Data_1d,
     Data_1d_az,
     Data_2d,
     Data_2d_az,
     Data_2d_rot,
-    append_name,
-    combine_masks,
+    export_data,
+    import_data,
+    integrate_data,
     make_reject_mask,
     make_saturated_mask,
     remove_outliers,
-    Worker,
-    import_data,
-    integrate_data
+    Worker
 )
 
 class Window(QMainWindow):
@@ -1773,9 +1774,9 @@ class Window(QMainWindow):
                 self.monitor_002
                 )
             self.worker.start() 
-            self.worker.export_data.connect(self.append_data)
+            self.worker.export_data_signal.connect(self.append_data)
             if self.batch_mode:
-                self.worker.export_data.connect(self.append_batch_mode_lists)
+                self.worker.export_data_signal.connect(self.append_batch_mode_lists)
             if not prog_dialog.wasCanceled():
                 self.worker.progress_signal.connect(prog_dialog.setValue)
             self.worker.finished.connect(self.worker.deleteLater)
@@ -2149,117 +2150,40 @@ class Window(QMainWindow):
         a[overflow_pix[0], overflow_pix[1]] = 1
         return np.sum(a)
 
-    def export_single_image(self, data):
-        if self.bit_depth == 32:
-            data.array = data.array.astype("int32")
-        elif self.bit_depth == 16:
-            data.array = data.array.astype("int16")
-        elif self.bit_depth == 8:
-            data.array = data.array.astype("int8")
-        if not self.batch_mode:
-            path = os.path.join(
-                data.dir, data.name.split("~")[1] + "." + "tif"
-            )  # always save as tif
-            if os.path.exists(path):
-                old_path = path
-                path = self.append_file(path)
-                self.show_warning_messagebox(
-                    "File " + old_path + " found, saving to " + path
-                )
-            tifffile.imwrite(path, data.array, dtype=data.array.dtype)
-
-        else:
-            if not os.path.exists(os.path.join(data.dir, "batch_processed")):
-                os.mkdir(os.path.join(data.dir, "batch_processed"))
-
-            path = os.path.join(
-                data.dir, "batch_processed", data.name.split("~")[1] + "." + "tif"
-            )
-            tifffile.imwrite(path, data.array, dtype=data.array.dtype)
-
-    def export_single_dat(self, data):
-        if not self.batch_mode:
-            path = os.path.join(data.dir, data.name.split("~")[1] + ".dat")
-            print("extension is {data.ext}")
-            if os.path.exists(path):
-                old_path = path
-                path = self.append_file(path)
-                self.show_warning_messagebox(
-                    "File " + old_path + " found, saving to " + path
-                )
-            np.savetxt(
-                path,
-                np.transpose([data.q, data.intensity, data.err]),
-                fmt="%1.6e",
-                delimiter="    ",
-            )
-        else:
-            if not os.path.exists(os.path.join(data.dir, "batch_processed")):
-                os.mkdir(os.path.join(data.dir, "batch_processed"))
-
-            path = os.path.join(
-                data.dir, "batch_processed", data.name.split("~")[1] + ".dat"
-            )
-            np.savetxt(
-                path,
-                np.transpose([data.q, data.intensity, data.err]),
-                fmt="%1.6e",
-                delimiter="    ",
-            )
-
     def click_export(self):
-        for data in self.get_all_selected():
-            if data != []:
-                if isinstance(data, Data_2d):
-                    self.export_single_image(data)
-                elif isinstance(data, Data_1d_az):
-                    self.export_1d_az(data)
+        names_types = self.get_names_types_selected()
+        # names_types = []
+        # for item in temp:
+        #     if item[1] == "smp":
+        #         if isinstance(self.sample_data[item[0]], Data_2d):
+        #             names_types.append(item)
+        #     elif item[1] == "bkg":
+        #         if isinstance(self.background_data[item[0]], Data_2d):
+        #             names_types.append(item)
+        #     else:
+        #         if isinstance(self.subtracted_data[item[0]], Data_2d):
+        #             names_types.append(item)
 
-                elif isinstance(data, Data_1d):
-                    self.export_single_dat(data)
-
-    def export_1d_az(self, data):
-        path = os.path.join(
-            data.dir, data.name.split("~")[1] + "_azimuthal_" + "." + data.ext
+        prog_dialog = QProgressDialog(self)
+        prog_dialog.show()
+        prog_dialog.autoClose()
+        prog_dialog.canceled.connect(self.cancel_process)
+        prog_dialog.setWindowTitle("Exporting data")
+        prog_dialog.setLabelText(f"Exporting {len(names_types)} files")
+        self.worker = Worker(
+            export_data,
+            self.sample_data,
+            self.background_data,
+            self.subtracted_data,
+            names_types,
+            self.bit_depth,
+            self.batch_mode
         )
-        if os.path.exists(path):
-            old_path = path
-            path = self.append_file(path)
-            self.show_warning_messagebox(
-                "File " + old_path + " found, saving to " + path
-            )
-        np.savetxt(
-            path, np.transpose([data.chi, data.intensity]), fmt="%1.6e", delimiter="    "
-        )
-
-    def append_file(self, path):
-        counter = 0
-        base_path = os.path.dirname(path)
-        ext = os.path.basename(path).split(".")[-1]
-        name = Path(path).stem
-        if os.path.exists(path):
-            # check if number suffix already:
-            suff = name.split("_")[-1]
-
-            if suff.isnumeric():
-                counter = int(suff)
-                pref = name.split("_")[:-1]
-                pref = "".join(map(str, pref))
-            else:
-                counter = 0
-                pref = name
-
-            while True:
-                counter += 1
-
-                new_name = pref + "_" + str(counter)
-                new_path = os.path.join(base_path, new_name + "." + ext)
-                if os.path.exists(new_path):
-                    continue
-                else:
-                    path = new_path
-                    break
-        return path
+        self.worker.start()
+        if not prog_dialog.wasCanceled():
+            self.worker.progress_signal.connect(prog_dialog.setValue)
+        self.worker.finished.connect(self.worker.deleteLater)
+        self.worker.finished.connect(self.clear_lists)
 
     def evt_update_batchmode_data(self, data):
         self.toggle_select_by_string(data, data.info["type"], False)
@@ -2322,9 +2246,9 @@ class Window(QMainWindow):
                     self.batch_mode
         )
         self.worker.start()
-        self.worker.export_data.connect(self.append_data)
+        self.worker.export_data_signal.connect(self.append_data)
         if self.batch_mode == True:
-            self.worker.export_data.connect(self.append_batch_mode_lists)
+            self.worker.export_data_signal.connect(self.append_batch_mode_lists)
         
                   
         if not prog_dialog.wasCanceled():
@@ -2332,7 +2256,9 @@ class Window(QMainWindow):
         if not self.batch_mode:
             self.worker.finished.connect(self.clear_lists)
         self.worker.finished.connect(self.worker.deleteLater)
-        self.worker.finished.connect(self.worker.quit)
+        
+        #TODO : do we need this quit?
+        #self.worker.finished.connect(self.worker.quit)
 
     def append_batch_mode_lists(self,data):
         if isinstance(data, Data_1d):
@@ -2533,8 +2459,8 @@ class Window(QMainWindow):
         self.worker = Worker(import_data, fnames, data_type, self.fit2d_mode, self.monitor_002)
         
         self.worker.start() 
-        self.worker.export_data.connect(self.append_data)
-        #self.worker.export_data.connect(self.init_image_import)
+        self.worker.export_data_signal.connect(self.append_data)
+        self.worker.export_data_signal.connect(self.init_image_import)
 
         # need to do the init part later
 
@@ -2646,6 +2572,14 @@ class Window(QMainWindow):
                 bkg_data * scale_factor, float(self.lineEdit_bkg_TM.text()) * civi_bkg
             )
             out["array"] = np.subtract(part1, part2)
+            
+            if self.bit_depth == 8:
+                out["array"] = out["array"].astype(np.uint8)
+            elif self.bit_depth == 16:
+                out["array"] = out["array"].astype(np.uint16)
+            else:
+                out["array"] = out["array"].astype(np.uint32)
+
             self.subtracted_data[out["name"]] = Data_2d(
                 out["dir"], out["ext"], out["name"], out["array"], out["info"]
             )
