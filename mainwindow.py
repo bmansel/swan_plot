@@ -37,7 +37,10 @@ from utils import (
     integrate_data,
     make_reject_mask,
     make_saturated_mask,
+    mask_pix_zero,
     remove_outliers,
+    subtract_2d,
+    subtract_1d,
     Worker
 )
 
@@ -1081,26 +1084,83 @@ class Window(QMainWindow):
                 self.deselect_by_filter(self.lineEdit_sub_filter.text(), name)
 
     def click_subtract(self):
-        if len(self.listWidget_smp.selectedIndexes()) == 0:
-            self.show_warning_messagebox("No sample selected")
+        # check that one sample and more than one background is selected
+        if len(self.listWidget_smp.selectedIndexes()) < 1:
+            self.show_warning_messagebox("No sample selected.", title="Error")
             return
-        if len(self.listWidget_bkg.selectedIndexes()) == 0:
-            self.show_warning_messagebox("No background selected")
-            return
-        smp = self.sample_data[self.listWidget_smp.selectedIndexes()[0].data()]
-        bkg = self.background_data[self.listWidget_bkg.selectedIndexes()[0].data()]
-        if isinstance(smp, Data_2d) and isinstance(bkg, Data_2d):
-            self.subtract_2d()
 
-        elif isinstance(smp, Data_1d) and isinstance(bkg, Data_1d):
-            try:
-                self.subtract_1d()
-            except Exception as e:
-                print(e)
-        else:
-            self.show_warning_messagebox(
-                "Not matching 1D or 2D data types which can be subtracted."
+        if len(self.listWidget_bkg.selectedIndexes()) < 1:
+            self.show_warning_messagebox("No background selected.", title="Error")
+            return
+
+        if len(self.listWidget_bkg.selectedIndexes()) > 1:
+            if len(self.listWidget_bkg.selectedIndexes()) != len(
+                self.listWidget_smp.selectedIndexes()
+            ):
+                self.show_warning_messagebox(
+                    "number of selected background and samples different. \
+                        Returning."
+                )
+            return
+
+        # check that all sample and background data sets are 1D or 2D
+        is2d = None
+        temp = self.listWidget_smp.selectedIndexes()[0].data()
+        if isinstance(self.sample_data[temp], Data_2d):
+            for item in self.get_all_selected():
+                if not isinstance(item, Data_2d):
+                    self.show_warning_messagebox("A data set is not 2 dimensional.")
+                    return
+            is2d = True
+        elif isinstance(self.sample_data[temp], Data_1d):
+            for item in self.get_all_selected():
+                if not isinstance(item, Data_1d):
+                    self.show_warning_messagebox("A data set is not 1 dimensional.")
+                    return
+            is1d = True
+        sample_names = self.listWidget_smp.selectedIndexes()
+        prog_dialog = QProgressDialog(self)
+        prog_dialog.show()
+        prog_dialog.autoClose()
+        prog_dialog.canceled.connect(self.cancel_process)
+        prog_dialog.setWindowTitle("Subtracting data")
+        prog_dialog.setLabelText(f"Subtracting {len(sample_names)} files")
+        if is2d:
+            self.worker = Worker(
+                subtract_2d,
+                self.listWidget_smp.selectedIndexes(),
+                self.sample_data, 
+                self.background_data[self.listWidget_bkg.selectedIndexes()[0].data()], 
+                self.subtracted_data,
+                self.mask, 
+                self.dsb_scale_factor.value(), 
+                float(self.lineEdit_smp_TM.text().strip()), 
+                float(self.lineEdit_bkg_TM.text().strip()),
+                self.bit_depth
+                )
+        elif is1d:
+            self.worker = Worker(
+            subtract_1d,
+            self.listWidget_smp.selectedIndexes(),
+            self.sample_data, 
+            self.background_data[self.listWidget_bkg.selectedIndexes()[0].data()], 
+            self.subtracted_data,
+            self.mask, 
+            self.dsb_scale_factor.value(), 
+            float(self.lineEdit_smp_TM.text().strip()), 
+            float(self.lineEdit_bkg_TM.text().strip()),
+            self.bit_depth
             )
+        self.worker.start()
+        self.worker.export_data_signal.connect(self.append_data)
+        if self.batch_mode:
+            self.worker.export_data_signal.connect(self.append_batch_mode_lists)
+        if not prog_dialog.wasCanceled():
+            self.worker.progress_signal.connect(prog_dialog.setValue)
+        self.worker.finished.connect(self.worker.deleteLater)
+
+        if not self.batch_mode:
+                self.worker.finished.connect(self.clear_lists)
 
     def get_data_dict(self, data_type):
         if data_type == "smp":
@@ -1449,10 +1509,10 @@ class Window(QMainWindow):
             if self.fit2d_mode:
                 self.mask = np.flipud(self.mask)
 
-    def mask_pix_zero(self, image):
-        inv_mask = np.abs(1 - self.mask)
-        masked_image = np.multiply(image, inv_mask)
-        return masked_image
+    # def mask_pix_zero(self, image):
+    #     inv_mask = np.abs(1 - self.mask)
+    #     masked_image = np.multiply(image, inv_mask)
+    #     return masked_image
 
     def mask_pix_nan(self, image):
         # inv_mask = np.abs(1-self.mask)
@@ -2075,7 +2135,7 @@ class Window(QMainWindow):
             # try:
             if image is not None:
                 if self.mask is not None:
-                    image = self.mask_pix_zero(image)
+                    image = mask_pix_zero(image, self.mask)
                 self.plot_2d(image, data_2d.name)
                 self.set_plot_image_name(data_2d.name, data_2d.info["type"])
                 self.clear_lists()
@@ -2506,30 +2566,7 @@ class Window(QMainWindow):
     def subtract_2d(self):
         # try:
 
-        if len(self.listWidget_smp.selectedIndexes()) < 1:
-            self.show_warning_messagebox("No sample selected.", title="Error")
-            return
-
-        if len(self.listWidget_bkg.selectedIndexes()) < 1:
-            self.show_warning_messagebox("No background selected.", title="Error")
-            return
-
-        if len(self.listWidget_bkg.selectedIndexes()) > 1:
-            if len(self.listWidget_bkg.selectedIndexes()) != len(
-                self.listWidget_smp.selectedIndexes()
-            ):
-                self.show_warning_messagebox(
-                    "number of selected background and samples different. \
-                        Returning."
-                )
-            return
-
-        if len(self.listWidget_bkg.selectedIndexes()) > 1:
-            self.show_warning_messagebox(
-                "More than one background selected, only one background \
-                    can be selected to subtract off."
-            )
-            return
+        
 
         # except:
         #    self.show_warning_messagebox("No background selected.")
@@ -2539,7 +2576,7 @@ class Window(QMainWindow):
         bkg_data = self.background_data[bkg_name].array
 
         if self.mask is not None:
-            bkg_data = self.mask_pix_zero(bkg_data)
+            bkg_data = self.mask_pix_zero(bkg_data, self.mask)
 
         for index in self.listWidget_smp.selectedIndexes():
             out = {}
@@ -2552,7 +2589,7 @@ class Window(QMainWindow):
             )  # add one if exists
             out["info"] = {"type": "sub"}
             if self.mask is not None:
-                smp_data = self.mask_pix_zero(self.sample_data[index.data()].array)
+                smp_data = mask_pix_zero(self.sample_data[index.data()].array, self.mask)
             else:
                 smp_data = self.sample_data[index.data()].array
 

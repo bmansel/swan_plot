@@ -665,12 +665,15 @@ def remove_outliers(self,
             )
             #self.subtracted_data[corr_data.name] = corr_data
 
-        self.export_data_signal.emit(corr_data)
+        export_data_signal.emit(corr_data)
         exported += 1
         if self.canceled != True:
             progress_signal.emit(int((exported / len(names_types)) * 100))
         cancel_signal.connect(self.cancel_thread)
-        
+
+def subtract_1d():
+    pass
+
         # if self.batch_mode:
         #     self.batchmode_data.emit(corr_data)
         # else:
@@ -750,7 +753,75 @@ def integrate_data(self,
     # only plot last one
     # if not self.batch_mode:
     #     self.plot_data.emit(corr_data)
+
+def mask_pix_zero(image, mask):
+        inv_mask = np.abs(1 - mask)
+        masked_image = np.multiply(image, inv_mask)
+        return masked_image
     
+def subtract_2d(self,
+        export_data_signal,
+        cancel_signal,
+        progress_signal,
+        data_name,
+        smp_names,  
+        smp_data, 
+        bkg_dataset, 
+        sub_data,
+        mask, 
+        scale, 
+        smp_TM, 
+        bkg_TM,
+        bit_depth
+        ):
+
+    exported = 0
+    self.canceled = False
+
+    if mask is not None:
+        bkg_dataset = mask_pix_zero(bkg_dataset.array, mask)
+    else:
+        bkg_dataset = bkg_dataset.array
+
+    for item in smp_names:
+        # TODO allow changing scale factor and civi
+        scale_factor = 1
+        civi_smp = 1
+        civi_bkg = 1
+
+        if mask is not None:
+            smp_dataset = mask_pix_zero(smp_data[item.data()].array, mask)
+        else:
+            smp_dataset = smp_data[item.data()].array
+
+        part1 = np.divide(
+                smp_dataset * scale, smp_TM * civi_smp
+            )
+
+        part2 = np.divide(
+                bkg_dataset * scale, bkg_TM * civi_bkg
+            )
+        
+        out = np.subtract(part1, part2)
+        if bit_depth == 8:
+            out = out.astype(np.uint8)
+        elif bit_depth == 16:
+            out = out.astype(np.uint16)
+        else:
+            out = out.astype(np.uint32)
+
+        subd_data = Data_2d(
+            smp_data[item.data()].dir,
+            smp_data[item.data()].ext,
+            "2D~" + "subd_" + smp_data[item.data()].name.split("~")[1],
+            out,
+            {"type": "sub"},
+        )
+    export_data_signal.emit(subd_data)
+    exported += 1
+    if self.canceled != True:
+        progress_signal.emit(int((exported / len(smp_names)) * 100))
+    cancel_signal.connect(self.cancel_thread)
 
 def export_data(self,
             export_data_signal,
