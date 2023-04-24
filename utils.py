@@ -713,8 +713,6 @@ def integrate_data(self,
                 chi_start, 
                 chi_end, 
                 mask, 
-                TMsmp, 
-                TMbkg,
                 batch_mode,
                 monitor_002
                  ):
@@ -723,7 +721,8 @@ def integrate_data(self,
     for item in names_types:
         if self.canceled:
             return
-        
+        TMsmp = 1
+        TMbkg = 1
         if item[1] == "smp":
             data_2d = sample_data[item[0]]
             normValue = TMsmp

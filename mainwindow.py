@@ -509,6 +509,7 @@ class Window(QMainWindow):
         self.dsb_scale_factor.setMaximum(10000000000)
         self.dsb_scale_factor.setDecimals(8)
         self.dsb_scale_factor.setValue(1.0)
+        self.dsb_scale_factor.setVisible(False)
         self.label_3 = QtWidgets.QLabel(self.groupBox_6)
         self.label_3.setGeometry(QtCore.QRect(130, 34, 151, 17))
         self.label_3.setObjectName("label_3")
@@ -536,6 +537,7 @@ class Window(QMainWindow):
         self.label_11 = QtWidgets.QLabel(self.groupBox_6)
         self.label_11.setGeometry(QtCore.QRect(130, 404, 241, 17))
         self.label_11.setObjectName("label_10")
+        self.label_11.setVisible(False)
         self.btn_load_PONI = QtWidgets.QPushButton(
             self.groupBox_6, clicked=lambda: self.click_load_poni()
         )
@@ -700,7 +702,7 @@ class Window(QMainWindow):
     def retranslate_ui(self):
         _translate = QtCore.QCoreApplication.translate
         self.setWindowTitle(_translate("MainWindow", "LFP reduction"))
-        self.grpBx_TM.setTitle(_translate("MainWindow", "TM"))
+        self.grpBx_TM.setTitle(_translate("MainWindow", "TM (applied on subtraction)"))
         self.lineEdit_bkg_TM.setText(_translate("MainWindow", "1.0"))
         self.lbl_bkg_TM.setText(_translate("MainWindow", "Background TM:"))
         self.lineEdit_smp_TM.setText(_translate("MainWindow", "1.0"))
@@ -1324,8 +1326,8 @@ class Window(QMainWindow):
             set_q_min = menu.addAction("Set q min")
             set_q_max = menu.addAction("Set q max")
             menu.addSeparator()
-            azi_integrate = menu.addAction("get I vs Q")
-            rad_integrate = menu.addAction("get I vs chi")
+            #azi_integrate = menu.addAction("get I vs Q")
+            #rad_integrate = menu.addAction("get I vs chi")
             action = menu.exec_(QtGui.QCursor.pos())
 
             # if action == set_angle_rot:
@@ -1363,71 +1365,71 @@ class Window(QMainWindow):
                     text_kw=dict(color="lime"),
                 )
                 self.canvas.draw()
-            elif action == azi_integrate:
-                data = self.get_plot_image_data()
-                self.figure2.clear()
-                ax2 = self.figure2.add_subplot(111)
-                if data.info["type"] == "smp":
-                    norm_value = float(self.lineEdit_smp_TM.text().strip())
-                elif data.info["type"] == "bkg":
-                    norm_value = float(self.lineEdit_bkg_TM.text().strip())
-                else:
-                    norm_value = 1
+            # elif action == azi_integrate:
+            #     data = self.get_plot_image_data()
+            #     self.figure2.clear()
+            #     ax2 = self.figure2.add_subplot(111)
+            #     if data.info["type"] == "smp":
+            #         norm_value = float(self.lineEdit_smp_TM.text().strip())
+            #     elif data.info["type"] == "bkg":
+            #         norm_value = float(self.lineEdit_bkg_TM.text().strip())
+            #     else:
+            #         norm_value = 1
 
-                norm_value /= self.dsb_scale_factor.value()
-                if self.monitor_002:
-                    norm_value *= data.info["civi"]
+            #     norm_value /= self.dsb_scale_factor.value()
+            #     if self.monitor_002:
+            #         norm_value *= data.info["civi"]
 
-                q, intensity, err = data.integrate_image(
-                    self.ai,
-                    self.sb_q_bins.value(),
-                    self.dsb_chi_start.value(),
-                    self.dsb_chi_end.value(),
-                    self.mask,
-                    norm_value,
-                )
+            #     q, intensity, err = data.integrate_image(
+            #         self.ai,
+            #         self.sb_q_bins.value(),
+            #         self.dsb_chi_start.value(),
+            #         self.dsb_chi_end.value(),
+            #         self.mask,
+            #         norm_value,
+            #     )
 
-                new_data = Data_1d(
-                    data.dir,
-                    "dat",
-                    "1D~" + data.name.split("~")[1],
-                    q,
-                    intensity,
-                    err,
-                    {"type": data.info["type"]},
-                )
-                self.append_data(new_data)
-                self.plot_1d_1d_data(
-                    ax2,
-                    new_data.q,
-                    new_data.intensity,
-                    new_data.err,
-                    new_data.name.split("~")[1],
-                )
-                self.canvas2.draw()
-                self.tabWidget.setCurrentWidget(self.tab_2)
+            #     new_data = Data_1d(
+            #         data.dir,
+            #         "dat",
+            #         "1D~" + data.name.split("~")[1],
+            #         q,
+            #         intensity,
+            #         err,
+            #         {"type": data.info["type"]},
+            #     )
+            #     self.append_data(new_data)
+            #     self.plot_1d_1d_data(
+            #         ax2,
+            #         new_data.q,
+            #         new_data.intensity,
+            #         new_data.err,
+            #         new_data.name.split("~")[1],
+            #     )
+            #     self.canvas2.draw()
+            #     self.tabWidget.setCurrentWidget(self.tab_2)
 
-            elif action == rad_integrate:
-                item = self.get_plot_image_data()
-                self.figure2.clear()
-                ax2 = self.figure2.add_subplot(111)
-                chi, intensity = self.integrate_radial(item)
-                if len(intensity) < 2:
-                    self.show_warning_messagebox(
-                        "Warning, length of data is less than 2!!"
-                    )
-                    return
-                data = Data_1d_az(
-                    item.dir,
-                    "dat",
-                    "1Daz~" + item.name.split("~")[1],
-                    chi,
-                    intensity,
-                    {"type": item.info["type"]},
-                )
-                self.append_data(data)
-                self.plot_1d_az(ax2, data.chi, data.intensity, data.name.split("~")[1])
-                self.tabWidget.setCurrentWidget(self.tab_2)
+            # elif action == rad_integrate:
+            #     item = self.get_plot_image_data()
+            #     self.figure2.clear()
+            #     ax2 = self.figure2.add_subplot(111)
+            #     chi, intensity = self.integrate_radial(item)
+            #     if len(intensity) < 2:
+            #         self.show_warning_messagebox(
+            #             "Warning, length of data is less than 2!!"
+            #         )
+            #         return
+            #     data = Data_1d_az(
+            #         item.dir,
+            #         "dat",
+            #         "1Daz~" + item.name.split("~")[1],
+            #         chi,
+            #         intensity,
+            #         {"type": item.info["type"]},
+            #     )
+            #     self.append_data(data)
+            #     self.plot_1d_az(ax2, data.chi, data.intensity, data.name.split("~")[1])
+            #     self.tabWidget.setCurrentWidget(self.tab_2)
 
     def no_data_selected(self):
         if (
@@ -1652,12 +1654,12 @@ class Window(QMainWindow):
             # self.plot_2Daz(data.data) # put plotting here
 
     def integrate_radial(self, data):
-        if data.info["type"] == "smp":
-            norm_value = float(self.lineEdit_smp_TM.text().strip())
-        elif data.info["type"] == "bkg":
-            norm_value = float(self.lineEdit_bkg_TM.text().strip())
-        else:
-            norm_value = 1
+        # if data.info["type"] == "smp":
+        #     norm_value = float(self.lineEdit_smp_TM.text().strip())
+        # elif data.info["type"] == "bkg":
+        #     norm_value = float(self.lineEdit_bkg_TM.text().strip())
+        # else:
+        norm_value = 1
 
         chi, intensity = self.ai.integrate_radial(
             data.array,
@@ -1827,8 +1829,6 @@ class Window(QMainWindow):
                     self.dsb_chi_start.value(),
                     self.dsb_chi_end.value(),
                     self.mask,
-                    float(self.lineEdit_smp_TM.text().strip()),
-                    float(self.lineEdit_bkg_TM.text().strip()),
                     self.batch_mode,
                     self.monitor_002
                     )
