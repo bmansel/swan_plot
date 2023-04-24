@@ -51,7 +51,6 @@ class Window(QMainWindow):
     def __init__(self, parent=None):
         super().__init__(parent)
         #self.threadpool = QtCore.QThreadPool()
-        #print("Multithreading with maximum %d threads" % self.threadpool.maxThreadCount())
         self.auto_mask_saturated_pixels = False
         self.monitor_002 = False
         self.mask = None
@@ -827,126 +826,124 @@ class Window(QMainWindow):
         This does the batch processing of the data.
 
         '''
-        # try:
-        if self.check_batch_input() is False:
-            print("check batch input failed...")
-            return
-        # set batch mode
+        try:
+            if self.check_batch_input() is False:
+                self.show_warning_messagebox("Batch processing cancelled")
+                return
+                
+            self.batch_smp_1d = []
+            self.batch_smp_2d = []
+            self.batch_bkg_1d = []
+            self.batch_bkg_2d = []
+            self.batch_sub_1d = []
+            self.batch_sub_2d = []
+
             
-        self.batch_smp_1d = []
-        self.batch_smp_2d = []
-        self.batch_bkg_1d = []
-        self.batch_bkg_2d = []
-        self.batch_sub_1d = []
-        self.batch_sub_2d = []
+            
+            expected_smps = len(self.get_all_selected("smp"))
+            expected_bkgs = len(self.get_all_selected("bkg"))
+            if expected_smps < 1:
+                self.show_warning_messagebox("No samples selected for batch processing")
+                return
 
-        self.groupBox.setEnabled(False)
-        
-        expected_smps = len(self.get_all_selected("smp"))
-        expected_bkgs = len(self.get_all_selected("bkg"))
-        print("expected samples is", expected_smps)
-        print("expected bkgs is", expected_bkgs)
-
-        self.batch_mode = True
-        QApplication.processEvents()
-        self.click_remove_outliers()  # now appends to batch_XXX_2d list
-        while self.worker.isRunning():
+            self.batch_mode = True
+            self.groupBox.setEnabled(False)
+            
             QApplication.processEvents()
-            time.sleep(0.001)
-        
-        while (len(self.batch_smp_2d) < expected_smps):
-            QApplication.processEvents()
-            time.sleep(0.01)
+            self.click_remove_outliers()  # now appends to batch_XXX_2d list
+            while self.worker.isRunning():
+                QApplication.processEvents()
+                time.sleep(0.001)
+            
+            while (len(self.batch_smp_2d) < expected_smps):
+                QApplication.processEvents()
+                time.sleep(0.01)
 
-        while (len(self.batch_bkg_2d) < expected_bkgs):
-            QApplication.processEvents()
-            time.sleep(0.01)
+            while (len(self.batch_bkg_2d) < expected_bkgs):
+                QApplication.processEvents()
+                time.sleep(0.01)
 
-        print("THIS SHOULD HAVE 1 ITEM :", self.batch_bkg_2d)
-        print("THIS SHOULD HAVE 1 ITEM :", len(self.batch_bkg_2d))
+            # clear all list widgets
+            self.clear_lists()
 
-        # clear all list widgets
-        self.clear_lists()
-
-        for item in self.batch_smp_2d:
-            self.toggle_select_by_string(item, "smp", True)
-            print("item batch_smp_2d is", item) #debug 
-
-        for item in self.batch_bkg_2d:
-            print("item batch_bkg_2d is", item) #debug 
-            self.toggle_select_by_string(item, "bkg", True)
-
-        self.click_integrate() 
-        while self.worker.isRunning():
-            QApplication.processEvents()
-            time.sleep(0.01)  
-
-        while len(self.batch_smp_1d) < expected_smps:
-            QApplication.processEvents()
-            time.sleep(0.01)
-
-        while len(self.batch_bkg_1d) < expected_bkgs:
-            QApplication.processEvents()
-            time.sleep(0.01)
-
-        self.clear_lists()
-        #self.lbl_pbar.setText("Integrated...2/4")
-        #self.pbar.setValue(50)
-        QApplication.processEvents()
-        if len(self.batch_bkg_2d) > 0:
-            self.toggle_select_by_string(self.batch_bkg_2d[0], "bkg", True)
             for item in self.batch_smp_2d:
                 self.toggle_select_by_string(item, "smp", True)
-            self.click_subtract()
+
+            for item in self.batch_bkg_2d:
+                self.toggle_select_by_string(item, "bkg", True)
+
+            self.click_integrate() 
+            while self.worker.isRunning():
+                QApplication.processEvents()
+                time.sleep(0.01)  
+
+            while len(self.batch_smp_1d) < expected_smps:
+                QApplication.processEvents()
+                time.sleep(0.01)
+
+            while len(self.batch_bkg_1d) < expected_bkgs:
+                QApplication.processEvents()
+                time.sleep(0.01)
+
             self.clear_lists()
-            print("batch_bkg_1d is", self.batch_bkg_1d)
-            if len(self.batch_bkg_1d) > 0:
-                self.toggle_select_by_string(self.batch_bkg_1d[0], "bkg", True)
-            else:
-                print("No background 1d data to subtract off.")
-                return
+            QApplication.processEvents()
+            if len(self.batch_bkg_2d) > 0:
+                self.toggle_select_by_string(self.batch_bkg_2d[0], "bkg", True)
+                for item in self.batch_smp_2d:
+                    self.toggle_select_by_string(item, "smp", True)
+                # 2D subtraction
+                self.click_subtract()
+                while self.worker.isRunning():
+                    QApplication.processEvents()
+                    time.sleep(0.001)
+            
+                while (len(self.batch_sub_2d) < expected_smps):
+                    QApplication.processEvents()
+                    time.sleep(0.01)
+                    
+                self.clear_lists()
+                
+                if len(self.batch_bkg_1d) > 0:
+                    self.toggle_select_by_string(self.batch_bkg_1d[0], "bkg", True)
+                else:
+                    return
+                
+                time.sleep(1)
+                for item in self.batch_smp_1d:
+                    self.toggle_select_by_string(item, "smp", True)
+                self.click_subtract()
+
+                while (len(self.batch_sub_1d) < expected_smps):
+                    QApplication.processEvents()
+                    time.sleep(0.01)
+                self.clear_lists()
+            
+            for item in self.batch_smp_2d:
+                self.toggle_select_by_string(item, "smp", True)
             for item in self.batch_smp_1d:
                 self.toggle_select_by_string(item, "smp", True)
-            self.click_subtract()
+            for item in self.batch_bkg_2d:
+                self.toggle_select_by_string(item, "bkg", True)
+            for item in self.batch_bkg_1d:
+                self.toggle_select_by_string(item, "bkg", True)
+            for item in self.batch_sub_2d:
+                self.toggle_select_by_string(item, "sub", True)
+            for item in self.batch_sub_1d:
+                self.toggle_select_by_string(item, "sub", True)
+
+            self.click_export()
+            while self.worker.isRunning():
+                QApplication.processEvents()
+                time.sleep(0.001)
+
+            self.batch_mode = False
+            self.groupBox.setEnabled(True)
             self.clear_lists()
-         #   self.lbl_pbar.setText("Subtracted...3/4")
-        #else:
-            #self.lbl_pbar.setText("No subtract...3/4")
-        #self.pbar.setValue(75)
 
-        # select all processed data:
-        
-        for item in self.batch_smp_2d:
-            self.toggle_select_by_string(item, "smp", True)
-
-        for item in self.batch_smp_1d:
-            self.toggle_select_by_string(item, "smp", True)
-
-        for item in self.batch_bkg_2d:
-            self.toggle_select_by_string(item, "bkg", True)
-
-        for item in self.batch_bkg_1d:
-            self.toggle_select_by_string(item, "bkg", True)
-        
-        for item in self.batch_sub_2d:
-            self.toggle_select_by_string(item, "sub", True)
-
-        for item in self.batch_sub_1d:
-            self.toggle_select_by_string(item, "sub", True)
-        count = 0
-
-        self.click_export()
-        #self.lbl_pbar.setText("Exported all subtracted...4/4")
-        #self.pbar.setValue(100)
-        self.batch_mode = False
-        self.groupBox.setEnabled(True)
-        self.clear_lists()
-        # except Exception as e:
-        #    print(e)
-        #    self.batch_mode = False
-        #    self.groupBox.setEnabled(True)
-
-    
+        except Exception as e:
+           print(e)
+           self.batch_mode = False
+           self.groupBox.setEnabled(True)
     
     
     def toggle_select_by_string(self, string, name, state):
@@ -1089,35 +1086,37 @@ class Window(QMainWindow):
             self.show_warning_messagebox("No sample selected.", title="Error")
             return
 
-        if len(self.listWidget_bkg.selectedIndexes()) < 1:
+        if len(self.listWidget_bkg.selectedIndexes()) != 1:
             self.show_warning_messagebox("No background selected.", title="Error")
             return
 
-        if len(self.listWidget_bkg.selectedIndexes()) > 1:
-            if len(self.listWidget_bkg.selectedIndexes()) != len(
-                self.listWidget_smp.selectedIndexes()
-            ):
-                self.show_warning_messagebox(
-                    "number of selected background and samples different. \
-                        Returning."
-                )
-            return
+        # if len(self.listWidget_bkg.selectedIndexes()) > 1:
+        #     if len(self.listWidget_bkg.selectedIndexes()) != len(
+        #         self.listWidget_smp.selectedIndexes()
+        #     ):
+        #         self.show_warning_messagebox(
+        #             "number of selected background and samples different. \
+        #                 Returning."
+        #         )
+        #     return
 
         # check that all sample and background data sets are 1D or 2D
         is2d = None
-        temp = self.listWidget_smp.selectedIndexes()[0].data()
-        if isinstance(self.sample_data[temp], Data_2d):
+        temp = self.listWidget_bkg.selectedIndexes()[0].data()
+        if isinstance(self.background_data[temp], Data_2d):
             for item in self.get_all_selected():
                 if not isinstance(item, Data_2d):
                     self.show_warning_messagebox("A data set is not 2 dimensional.")
                     return
             is2d = True
-        elif isinstance(self.sample_data[temp], Data_1d):
+        elif isinstance(self.background_data[temp], Data_1d):
             for item in self.get_all_selected():
                 if not isinstance(item, Data_1d):
                     self.show_warning_messagebox("A data set is not 1 dimensional.")
                     return
             is1d = True
+        else:
+            self.show_warning_messagebox("Data is not one or two dimensional.")
         sample_names = self.listWidget_smp.selectedIndexes()
         prog_dialog = QProgressDialog(self)
         prog_dialog.show()
@@ -1130,8 +1129,7 @@ class Window(QMainWindow):
                 subtract_2d,
                 self.listWidget_smp.selectedIndexes(),
                 self.sample_data, 
-                self.background_data[self.listWidget_bkg.selectedIndexes()[0].data()], 
-                self.subtracted_data,
+                self.background_data[self.listWidget_bkg.selectedIndexes()[0].data()],
                 self.mask, 
                 self.dsb_scale_factor.value(), 
                 float(self.lineEdit_smp_TM.text().strip()), 
@@ -1143,13 +1141,10 @@ class Window(QMainWindow):
             subtract_1d,
             self.listWidget_smp.selectedIndexes(),
             self.sample_data, 
-            self.background_data[self.listWidget_bkg.selectedIndexes()[0].data()], 
-            self.subtracted_data,
-            self.mask, 
+            self.background_data[self.listWidget_bkg.selectedIndexes()[0].data()],
             self.dsb_scale_factor.value(), 
             float(self.lineEdit_smp_TM.text().strip()), 
             float(self.lineEdit_bkg_TM.text().strip()),
-            self.bit_depth
             )
         self.worker.start()
         self.worker.export_data_signal.connect(self.append_data)
@@ -1434,10 +1429,6 @@ class Window(QMainWindow):
                 self.plot_1d_az(ax2, data.chi, data.intensity, data.name.split("~")[1])
                 self.tabWidget.setCurrentWidget(self.tab_2)
 
-            # print(p3, " this is p3" )
-            # print(p2, " this is p2" )
-            # print(np.rad2deg(angle + np.pi / 2))
-
     def no_data_selected(self):
         if (
             not self.listWidget_smp.selectedItems()
@@ -1454,7 +1445,6 @@ class Window(QMainWindow):
             data = self.get_plot_image_data()
             if isinstance(data, Data_2d):
                 rotd_img = data.rotate(self.dsb_rot_ang.value())
-                # print(rotd_img)
                 name = "2d_rot_" + data.name.split("~")[1]
                 self.append_data(
                     Data_2d_rot(data.dir, data.ext, name, rotd_img, data.info)
@@ -1469,7 +1459,6 @@ class Window(QMainWindow):
         )
         if fname and fname != "":
             mask_data = np.loadtxt(fname, usecols=(0, 1), comments="#")
-            # print(self.listWidget_smp.count())
             if self.listWidget_smp.count() < 1:
                 self.show_warning_messagebox(
                     "No data loaded, load a sample image file first."
@@ -1562,10 +1551,8 @@ class Window(QMainWindow):
     def check002(self, checked):
         if checked:
             self.monitor_002 = True
-            # print(self.monitor_002)
         else:
             self.monitor_002 = False
-            # print(self.monitor_002)
 
     def click_rename(self):
         if len(self.listWidget_smp.selectedIndexes()) != 0:
@@ -1714,7 +1701,7 @@ class Window(QMainWindow):
 
             return data
 
-    def subtract_1d(self):
+    def subtract_1d_old(self):
         if len(self.listWidget_smp.selectedIndexes()) < 1:
             self.show_warning_messagebox("No sample selected.")
             return
@@ -1787,112 +1774,77 @@ class Window(QMainWindow):
         )
     
     def click_integrate(self):
-        
-        del self.ai
-        _ = self.get_ai()
-        if self.ai is None:
-            self.no_ai_found_error()
-        else:
-            self.figure2.clear()
-            ax2 = self.figure2.add_subplot(111)
+        try:
+            if self.get_all_selected() == []:
+                self.show_warning_messagebox("No data selected.")
+                return
             
-            temp = self.get_names_types_selected()
+            del self.ai
+            _ = self.get_ai()
+            if self.ai is None:
+                self.no_ai_found_error()
+            else:
+                self.figure2.clear()
+                ax2 = self.figure2.add_subplot(111)
+                
+                temp = self.get_names_types_selected()
 
-            names_types = []
-            for item in temp:
-                print("integrate item is :", item)
-                if item[1] == "smp":
-                    if isinstance(self.sample_data[item[0]], Data_2d):
-                        names_types.append(item)
-                elif item[1] == "bkg":
-                    if isinstance(self.background_data[item[0]], Data_2d):
-                        names_types.append(item)
-                else:
-                    if isinstance(self.subtracted_data[item[0]], Data_2d):
-                        names_types.append(item)
-            
-            prog_dialog = QProgressDialog(self)
-            prog_dialog.show()
-            prog_dialog.autoClose()
-            prog_dialog.canceled.connect(self.cancel_process)
-            prog_dialog.setWindowTitle("Integrating data")
-            prog_dialog.setLabelText(f"Integrating {len(names_types)} files")
-            self.worker = Worker(
-                integrate_data,
-                self.ai,
-                self.sample_data,
-                self.background_data,
-                self.subtracted_data,
-                names_types,
-                self.sb_q_bins.value(),
-                self.dsb_chi_start.value(),
-                self.dsb_chi_end.value(),
-                self.mask,
-                float(self.lineEdit_smp_TM.text().strip()),
-                float(self.lineEdit_bkg_TM.text().strip()),
-                self.batch_mode,
-                self.monitor_002
-                )
-            self.worker.start() 
-            self.worker.export_data_signal.connect(self.append_data)
-            if self.batch_mode:
-                self.worker.export_data_signal.connect(self.append_batch_mode_lists)
-            if not prog_dialog.wasCanceled():
-                self.worker.progress_signal.connect(prog_dialog.setValue)
-            self.worker.finished.connect(self.worker.deleteLater)
+                names_types = []
+                for item in temp:
+                    if item[1] == "smp":
+                        if isinstance(self.sample_data[item[0]], Data_2d):
+                            names_types.append(item)
+                        else:
+                            self.show_warning_messagebox("A data set is not 2 dimensional.")
+                            return
+                    elif item[1] == "bkg":
+                        if isinstance(self.background_data[item[0]], Data_2d):
+                            names_types.append(item)
+                        else:
+                            self.show_warning_messagebox("A data set is not 2 dimensional.")
+                            return
+                    else:
+                        if isinstance(self.subtracted_data[item[0]], Data_2d):
+                            names_types.append(item)
+                        else:
+                            self.show_warning_messagebox("A data set is not 2 dimensional.")
+                            return
+                
+                prog_dialog = QProgressDialog(self)
+                prog_dialog.show()
+                prog_dialog.autoClose()
+                prog_dialog.canceled.connect(self.cancel_process)
+                prog_dialog.setWindowTitle("Integrating data")
+                prog_dialog.setLabelText(f"Integrating {len(names_types)} files")
+                self.worker = Worker(
+                    integrate_data,
+                    self.ai,
+                    self.sample_data,
+                    self.background_data,
+                    self.subtracted_data,
+                    names_types,
+                    self.sb_q_bins.value(),
+                    self.dsb_chi_start.value(),
+                    self.dsb_chi_end.value(),
+                    self.mask,
+                    float(self.lineEdit_smp_TM.text().strip()),
+                    float(self.lineEdit_bkg_TM.text().strip()),
+                    self.batch_mode,
+                    self.monitor_002
+                    )
+                self.worker.start() 
+                self.worker.export_data_signal.connect(self.append_data)
+                if self.batch_mode:
+                    self.worker.export_data_signal.connect(self.append_batch_mode_lists)
+                if not prog_dialog.wasCanceled():
+                    self.worker.progress_signal.connect(prog_dialog.setValue)
+                self.worker.finished.connect(self.worker.deleteLater)
 
-            if not self.batch_mode:
-                self.worker.finished.connect(self.clear_lists)
-
-            # for data in self.get_all_selected():
-            #     if isinstance(data, Data_2d):
-            #         if data.info["type"] == "smp":
-            #             norm_value = float(self.lineEdit_smp_TM.text().strip())
-            #         elif data.info["type"] == "bkg":
-            #             norm_value = float(self.lineEdit_bkg_TM.text().strip())
-            #         else:
-            #             norm_value = 1
-            #         if self.monitor_002:
-            #             norm_value *= data.info["civi"]
-                #     q, intensity, err = data.integrate_image(
-                #         self.ai,
-                #         self.sb_q_bins.value(),
-                #         self.dsb_chi_start.value(),
-                #         self.dsb_chi_end.value(),
-                #         self.mask,
-                #         norm_value / self.dsb_scale_factor.value(),
-                #     )
-                #     new_data = Data_1d(
-                #         data.dir,
-                #         "dat",
-                #         "1D~" + data.name.split("~")[1],
-                #         q,
-                #         intensity,
-                #         err,
-                #         {"type": data.info["type"]},
-                #     )
-                #     self.append_data(new_data)
-                #     self.plot_1d_1d_data(
-                #         ax2,
-                #         new_data.q,
-                #         new_data.intensity,
-                #         new_data.err,
-                #         new_data.name.split("~")[1],
-                #     )
-                #     if self.batch_mode:
-                #         if new_data.info["type"] == "smp":
-                #             self.batch_smp_1d.append(new_data.name)
-                #         elif new_data.info["type"] == "bkg":
-                #             self.batch_bkg_1d.append(new_data.name)
-                #         elif new_data.info["type"] == "sub":
-                #             self.batch_sub_1d.append(new_data.name)
-                #         QApplication.processEvents()
-
-            # self.canvas2.draw()
-            # if not self.batch_mode:
-            #     self.clear_lists()
-            #     self.tabWidget.setCurrentWidget(self.tab_2)
-
+                if not self.batch_mode:
+                    self.worker.finished.connect(self.clear_lists)
+        except Exception as e:
+            self.show_warning_messagebox(str(e))       
+ 
     def click_load_poni(self):
         try:
             if self.BL23A_mode:
@@ -1905,7 +1857,6 @@ class Window(QMainWindow):
                 if fname and fname != "":
                     with open(fname, "rb") as f:
                         fit2d_dic = tomli.load(f)
-                    print(fit2d_dic)
                     self.fill_param_settings(fit2d_dic)
                     _ = self.get_ai()
                     self.disable_params_input()
@@ -1924,7 +1875,6 @@ class Window(QMainWindow):
                 if fname and fname != "":
                     self.ai = pyFAI.load(fname)
                     fit2d_dic = self.ai.getFit2D()
-                    # print(fit2d_dic)
                     self.fill_param_settings(fit2d_dic)
                     self.disable_params_input()
                     self.set_enable_data_operations(True)
@@ -2009,8 +1959,6 @@ class Window(QMainWindow):
         except Exception as e:
             print(e)
             return
-            # print(self.ai)
-            # print(self.ai.getFit2D())
 
     def get_first_sel(self):
         try:
@@ -2073,8 +2021,6 @@ class Window(QMainWindow):
 
     def remove_selected(self):
         # update to while list
-        print(sys.getrefcount(self.sample_data))
-        print(sys.getsizeof(self.sample_data))
         while len(self.listWidget_smp.selectedIndexes()) > 0:
             item = self.listWidget_smp.selectedIndexes()[0]
             del self.sample_data[item.data()]
@@ -2096,13 +2042,10 @@ class Window(QMainWindow):
 
     def set_plot_image_name(self, name, img_type):
         self.plt_info = (name, img_type)
-        # print(self.plt_info[0])
-        # print(self.plt_info[1])
+
 
     def get_plot_image_data(self):
-        # print( self.plt_info[1])
         if self.plt_info[1] == "smp":
-            # print(sample_data[self.plt_info[0]])
             return self.sample_data[self.plt_info[0]]
         elif self.plt_info[1] == "bkg":
             return self.background_data[self.plt_info[0]]
@@ -2117,7 +2060,6 @@ class Window(QMainWindow):
             or isinstance(data, Data_2d_rot)
         ):
             self.set_plot_image_name(data.name, data.info["type"])
-            # print(self.plt_info[0])
             self.tabWidget.setCurrentWidget(self.tab)
             self.show_image()
         elif isinstance(data, Data_1d) or isinstance(data, Data_1d_az):
@@ -2162,9 +2104,6 @@ class Window(QMainWindow):
 
     def check_overflow_pix(self, array, name):
         num_high_pix = self.count_overflow_pix(array.copy())
-        print(num_high_pix)
-        print(array.dtype)
-        print(np.max(array))
         if num_high_pix > 0 and self.bit_depth < 32:
             dlg = QtWidgets.QMessageBox(self)
             dlg.setWindowTitle("Pixel(s) overflowing, convert to higher bit depth")
@@ -2211,39 +2150,36 @@ class Window(QMainWindow):
         return np.sum(a)
 
     def click_export(self):
-        names_types = self.get_names_types_selected()
-        # names_types = []
-        # for item in temp:
-        #     if item[1] == "smp":
-        #         if isinstance(self.sample_data[item[0]], Data_2d):
-        #             names_types.append(item)
-        #     elif item[1] == "bkg":
-        #         if isinstance(self.background_data[item[0]], Data_2d):
-        #             names_types.append(item)
-        #     else:
-        #         if isinstance(self.subtracted_data[item[0]], Data_2d):
-        #             names_types.append(item)
-
-        prog_dialog = QProgressDialog(self)
-        prog_dialog.show()
-        prog_dialog.autoClose()
-        prog_dialog.canceled.connect(self.cancel_process)
-        prog_dialog.setWindowTitle("Exporting data")
-        prog_dialog.setLabelText(f"Exporting {len(names_types)} files")
-        self.worker = Worker(
-            export_data,
-            self.sample_data,
-            self.background_data,
-            self.subtracted_data,
-            names_types,
-            self.bit_depth,
-            self.batch_mode
-        )
-        self.worker.start()
-        if not prog_dialog.wasCanceled():
-            self.worker.progress_signal.connect(prog_dialog.setValue)
-        self.worker.finished.connect(self.worker.deleteLater)
-        self.worker.finished.connect(self.clear_lists)
+        try:
+            if self.get_all_selected() == []:
+                self.show_warning_messagebox("No data selected.")
+                return
+            
+            names_types = self.get_names_types_selected()
+            
+            prog_dialog = QProgressDialog(self)
+            prog_dialog.show()
+            prog_dialog.autoClose()
+            prog_dialog.canceled.connect(self.cancel_process)
+            prog_dialog.setWindowTitle("Exporting data")
+            prog_dialog.setLabelText(f"Exporting {len(names_types)} files")
+            self.worker = Worker(
+                export_data,
+                self.sample_data,
+                self.background_data,
+                self.subtracted_data,
+                names_types,
+                self.bit_depth,
+                self.batch_mode
+            )
+            self.worker.start()
+            if not prog_dialog.wasCanceled():
+                self.worker.progress_signal.connect(prog_dialog.setValue)
+            self.worker.finished.connect(self.worker.deleteLater)
+            self.worker.finished.connect(self.clear_lists)
+        except Exception as e:
+            print(e)
+            self.show_warning_messagebox("Exporting failed.")
 
     def evt_update_batchmode_data(self, data):
         self.toggle_select_by_string(data, data.info["type"], False)
@@ -2260,6 +2196,10 @@ class Window(QMainWindow):
     def click_remove_outliers(self):
         # if we have a large number selected we copy these to a new list??
         # this is not needed...
+        if self.get_all_selected() == []:
+                self.show_warning_messagebox("No data selected.")
+                return
+
         temp = self.get_names_types_selected()
         names_types = []
         for item in temp:
@@ -2272,15 +2212,6 @@ class Window(QMainWindow):
             else:
                 if isinstance(self.subtracted_data[item[0]], Data_2d):
                     names_types.append(item)
-
-        #data_2d_all = self.get_all_selected()
-
-        # for data_2d in data_2d_all:
-        #     if not isinstance(data_2d, Data_2d):
-        #         data_2d_all.remove(data_2d)
-
-        # if not data_2d_all:
-        #     self.show_warning_messagebox("No 2d data selected.")
 
         if self.comboBox_size.currentText() == "3":
             size = int(3)
@@ -2333,12 +2264,8 @@ class Window(QMainWindow):
                 self.batch_smp_2d.append(data.name)
             elif data.info["type"] == "bkg":
                 self.batch_bkg_2d.append(data.name)
-                print("Should append at this line") #debug
-                print("batch_bkg_2d :", self.batch_bkg_2d) #debug
             elif data.info["type"] == "sub":
                 self.batch_sub_2d.append(data.name)
-        print("append_batch_mode_lists name: ", data.name) #debug
-        print("append_batch_mode_lists type: ", data.info["type"]) #debug
     
 
     def plot_1d_1d_data(self, axis, q, intensity, err, label):
@@ -2449,7 +2376,6 @@ class Window(QMainWindow):
         del data
 
     def set_bit_depth(self, array):
-        print(array.dtype)
         if array.dtype == "uint8" or array.dtype == "int8":
             self.bit_depth = 8
         elif array.dtype == "uint16" or array.dtype == "int16":
@@ -2519,6 +2445,7 @@ class Window(QMainWindow):
         self.worker = Worker(import_data, fnames, data_type, self.fit2d_mode, self.monitor_002)
         
         self.worker.start() 
+
         self.worker.export_data_signal.connect(self.append_data)
         self.worker.export_data_signal.connect(self.init_image_import)
 
@@ -2527,24 +2454,16 @@ class Window(QMainWindow):
         # need to do cancel later
         if not prog_dialog.wasCanceled():
             self.worker.progress_signal.connect(prog_dialog.setValue)
-        self.worker.finished.connect(self.timer)
         self.worker.finished.connect(self.worker.deleteLater)
         self.clear_lists()
     
     def cancel_process(self):
         #self.prog_dialog.destroy(destroyWindow=True)
+        if self.worker.isRunning():
+            self.worker.cancel_signal.emit(True)
         QApplication.processEvents()
-        self.worker.cancel_signal.emit(True)
         #self.worker.quit()
-        
 
-    def timer(self):
-        print("importing took ", perf_counter() - self.t1, "s")
-        #self.worker.deleteLater()
-        #del self.worker
-
-        gc.collect()
-        #print(self.worker)
 
     def show_warning_messagebox(self, text, title="Warning"):
         msg = QtWidgets.QMessageBox()

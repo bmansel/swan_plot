@@ -8,6 +8,7 @@ import os
 import fabio
 import PIL.Image as IImage
 import matplotlib.pyplot as plt
+import time
 from pathlib import Path
 from matplotlib.patches import Arc
 from matplotlib.transforms import IdentityTransform, TransformedBbox, Bbox
@@ -186,19 +187,12 @@ def calc_pad_size(new_corner_pos, Lx, Ly):
         x, y = new_corner_pos[pos]
         newX.append(x)
         newY.append(y)
-    print(newX)
-    print(newY)
 
     padLx = np.ceil(np.min(newX) - 0)
     padRx = np.ceil(np.max(newX) - Lx)
 
     padDy = np.ceil(np.min(newY) - 0)
     padUy = np.ceil(np.max(newY) - Ly)
-
-    print("min X pad " + str(padLx))
-    print("max X Pad " + str(padRx))
-    print("min Y pad " + str(padDy))
-    print("max Y pad " + str(padUy))
 
     if padLx < 0:
         padLx = int(np.abs(padLx))
@@ -442,9 +436,7 @@ class Data_2d:
         )
 
     def remove_outliers(self, radius, threshold):
-        # footprint_function = disk
-        # footprint = footprint_function(radius=radius)
-        print(self.array.dtype)
+        
         if self.array.dtype == 'uint32':
             median_filtered = cv2.medianBlur(self.array.astype('f'), int(radius))
             median_filtered = np.array(median_filtered, dtype='uint')
@@ -499,12 +491,6 @@ class Data_2d:
         # cX += padLx
         # cY += padDy
 
-        # print(val)
-        # print(padLx)
-        # print(padRx)
-        # print(padDy)
-        # print(padUy)
-
         cX = float(self.lineEdit_X_dir.text().strip())
         cY = float(self.lineEdit_Y_dir.text().strip())
 
@@ -523,10 +509,6 @@ class Data_2d:
             x, y = shifted_corners[pos]
             newX.append(x)
             newY.append(y)
-        print("min X index is: ", np.round(np.min(newX)))
-        print("max X index is: ", np.round(np.max(newX)))
-        print("min Y index is: ", np.round(np.min(newY)))
-        print("max Y index is: ", np.round(np.max(newY)))
 
         minX = np.round(np.min(newX))
         maxX = np.round(np.max(newX))
@@ -671,9 +653,40 @@ def remove_outliers(self,
             progress_signal.emit(int((exported / len(names_types)) * 100))
         cancel_signal.connect(self.cancel_thread)
 
-def subtract_1d():
-    pass
+def subtract_1d(self,
+        export_data_signal,
+        cancel_signal,
+        progress_signal,
+        data_name,
+        smp_names,  
+        smp_data, 
+        bkg_dataset, 
+        scale, 
+        smp_TM, 
+        bkg_TM,
+        ):
+    exported = 0
+    self.canceled = False
+    for item in smp_names:
+        part1 = np.divide(smp_data[item.data()].intensity * scale, smp_TM)
+        part2 = np.divide(bkg_dataset.intensity * scale, bkg_TM)
+        err_p1 = np.divide(smp_data[item.data()].err * scale, smp_TM)
+        err_p2 = np.divide(bkg_dataset.err * scale, bkg_TM)
 
+        subd_data = Data_1d(
+            smp_data[item.data()].dir,
+            "dat",
+            "1D~" + "subd_" + smp_data[item.data()].name.split("~")[1],
+            smp_data[item.data()].q,
+            np.subtract(part1, part2),
+            np.sqrt(np.add(np.square(err_p1), np.square(err_p2))),
+            {"type": "sub", "dim": "1D"}
+        )
+        export_data_signal.emit(subd_data)
+        exported += 1
+        if self.canceled != True:
+            progress_signal.emit(int((exported / len(smp_names)) * 100))
+        cancel_signal.connect(self.cancel_thread)
         # if self.batch_mode:
         #     self.batchmode_data.emit(corr_data)
         # else:
@@ -737,7 +750,6 @@ def integrate_data(self,
             err,
             data_2d.info,
         )
-        print("integrated data: " + corr_data.name)
         export_data_signal.emit(corr_data)
         exported += 1
         if self.canceled != True:
@@ -766,8 +778,7 @@ def subtract_2d(self,
         data_name,
         smp_names,  
         smp_data, 
-        bkg_dataset, 
-        sub_data,
+        bkg_dataset,
         mask, 
         scale, 
         smp_TM, 
@@ -804,11 +815,11 @@ def subtract_2d(self,
         
         out = np.subtract(part1, part2)
         if bit_depth == 8:
-            out = out.astype(np.uint8)
+            out = out.astype(np.int8)
         elif bit_depth == 16:
-            out = out.astype(np.uint16)
+            out = out.astype(np.int16)
         else:
-            out = out.astype(np.uint32)
+            out = out.astype(np.int32)
 
         subd_data = Data_2d(
             smp_data[item.data()].dir,
@@ -817,11 +828,11 @@ def subtract_2d(self,
             out,
             {"type": "sub"},
         )
-    export_data_signal.emit(subd_data)
-    exported += 1
-    if self.canceled != True:
-        progress_signal.emit(int((exported / len(smp_names)) * 100))
-    cancel_signal.connect(self.cancel_thread)
+        export_data_signal.emit(subd_data)
+        exported += 1
+        if self.canceled != True:
+            progress_signal.emit(int((exported / len(smp_names)) * 100))
+        cancel_signal.connect(self.cancel_thread)
 
 def export_data(self,
             export_data_signal,
@@ -843,7 +854,6 @@ def export_data(self,
             return
         data = get_data(item[0], item[1], sample_data, background_data, subtracted_data)
         if isinstance(data, Data_1d):
-            print("exporting 1d data")
             export_single_dat(data, batch_mode)
         elif isinstance(data, Data_2d):
             export_single_image(data, bit_depth, batch_mode)
@@ -907,7 +917,6 @@ def export_single_dat(data, batch_mode):
             fmt="%1.6e",
             delimiter="    ",
         )
-    print("saved to: " + path)
 
 def export_single_image(data, bit_depth, batch_mode):
     if bit_depth == 32:
@@ -936,11 +945,6 @@ def export_single_image(data, bit_depth, batch_mode):
             data.dir, "batch_processed", data.name.split("~")[1] + "." + "tif"
         )
         tifffile.imwrite(path, data.array, dtype=data.array.dtype)
-
-    print("saved to: " + path)
-
-
-
 
 class Worker(QThread):
     export_data_signal = pyqtSignal(object)
@@ -1012,6 +1016,7 @@ def import_data(
     ):
     exported = 0
     self.canceled = False
+    time.sleep(0.1)
     for item in fnames:
         if self.canceled:
             self.deleteLater()
@@ -1074,7 +1079,6 @@ def import_data(
         elif item.split(".")[-1] == "dat":
             try:
                 raw_data = np.loadtxt(item, usecols=(0, 1, 2))
-                # print(raw_data[:,1])
                 data = Data_1d(
                     os.path.dirname(item),
                     os.path.basename(item).split(".")[-1],
